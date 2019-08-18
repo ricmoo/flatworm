@@ -1,0 +1,27 @@
+{
+  "name": "flatworm",
+  "version": "0.0.1-beta.1",
+  "description": "A very simple documentation generation tool.",
+  "main": "index.js",
+  "bin": {
+    "flatworm": "./bin/flatworm.js"
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "documentation",
+    "docs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ricmoo/flatworm.git"
+  },
+  "author": "Richard Moore <me@ricmoo.com>",
+  "license": "MIT"
+}
