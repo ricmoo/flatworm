@@ -186,13 +186,22 @@ function markdown(content, context) {
 /////////////////////////////
 // Code Operations
 
+function wrapRequire(name) {
+    let first = name.substring(0, 1);
+    if (first === "." || first === "/" || first === "\\") {
+        name = resolve(process.cwd(), name);
+        return require(name);
+    }
+    return require(name);
+}
+
 async function verifyCode(code) {
     const lines = code.split("\n");
 
     let contextObject = {
         _inspect: function(result) { return JSON.stringify(result); },
         console: console,
-        require: require
+        require: wrapRequire
     };
     let context = vm.createContext(contextObject);
 
