@@ -2,7 +2,7 @@
 
 const { createHash } = require("crypto");
 const fs = require("fs");
-const { basename, dirname, extname, resolve } = require("path");
+const { basename, dirname, extname, relative, resolve } = require("path");
 const { inherit } = require("util");
 const vm = require("vm");
 
@@ -12,22 +12,37 @@ const vm = require("vm");
 //   - Used to prevent changes to generated files from being
 //     overritten
 
-function hash(content) {
-    const contentHash = createHash("sha256").update(content).digest("hex");
-    return `<!-- ContentHash:${ contentHash } -->`;
-}
-const _checkLength = hash("").length;
+function hash(content, format) {
+    if (format == null) { format = "html"; }
 
-function checkHash(content) {
-    content = content.trim();
-    let offset = content.length - _checkLength;
+    const contentHash = createHash("sha256").update(content).digest("hex");
+    if (format === "html") {
+        return `<!-- ContentHash:${ contentHash } -->`;
+    } else if (format === "markdown") {
+        return `\n\n-----\n**Content Hash:** ${ contentHash }`;
+    }
+
+    throw new Error("unknown format: " + format);
+}
+
+const _checkLength = {
+    html: hash("", "html").length,
+    markdown: hash("", "markdown").length,
+};
+
+function checkHash(content, format) {
+    if (format == null) { format = "html"; }
+
+    let offset = content.length - _checkLength[format];
     let check = content.substring(0, offset);
     let contentHash = content.substring(offset);
-    return (hash(check) === contentHash);
+    return (hash(check, format) === contentHash);
 }
 
-function injectHash(content) {
-    return content + hash(content);
+function injectHash(content, format) {
+    if (format == null) { format = "html"; }
+
+    return content + hash(content, format);
 }
 
 const _inspectScript = new vm.Script("_inspect(_)", { filename: "dummy.js" });
@@ -50,7 +65,38 @@ async function runContext(context, code) {
 /////////////////////////////
 // Markdown
 
-function markdownLink(content, context, preserveHtml) {
+function markdownLinkMarkdown(content, context) {
+
+    // [Link Title](link)
+    content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (all, title, url) => {
+        if (url.indexOf(":") === -1) {
+            url = (relative(context._currentPage.path, context.getAnchor(url).split("#")[0]) || "./");
+        }
+        return `[${ title }](${ url })`; //<a href="${ url }">${ title }</a>`;
+    });
+
+    // [[link]]
+    content = content.replace(/\[\[([^\]]*)\]\]/ig, (all, url) => {
+        let title = url;
+        if (url.indexOf(":") === -1) {
+            title = context.getName(url);
+            url = (relative(context._currentPage.path, context.getAnchor(url).split("#")[0]) || "./");
+        }
+        return `[${ title }](${url})`;
+    });
+
+    return content;
+}
+
+function markdownLink(content, context, preserveHtml, format) {
+    if (format == null) { format = "html"; }
+
+    if (format === "markdown") {
+        return markdownLinkMarkdown(content, context);
+    } else if (format !== "html") {
+        throw new Error("unknown format: " + format);
+    }
+
     if (!preserveHtml) {
         // Collapse whitespace and escape HTML
         content = content.trim()
@@ -81,7 +127,45 @@ function markdownLink(content, context, preserveHtml) {
     return content;
 }
 
-function markdownText(content, context, preserveHtml) {
+function markdownTextMarkdown(content, context) {
+    // __Underline__
+    content = content.replace(/__(.*?)__/g, (all, body) => {
+        return `*${ body }*`;
+    });
+
+    // ^^Superscript^^
+    content = content.replace(/\^\^(.*?)\^\^/g, (all, body) => {
+        if (body.match(/\s/)) { body = "(" + body + ")"; }
+        return `^${ body }`;
+    });
+
+    // //Italic//
+    content = content.replace(/(^|(?<!:))\/\/(.*?)(?<!:)\/\//g, (all, d0, body, d1) => {
+        return `*${ body }*`;
+    });
+
+    // ``Code``
+    content = content.replace(/``(.*?)``/g, (all, body) => {
+        return "`" + body + "`";
+    });
+
+    content = content.replace(/\\(.)/g, (all, chr) => (chr));
+
+    // Links [name](href)
+    content = markdownLink(content, context, false, "markdown");
+
+    return content;
+}
+
+function markdownText(content, context, preserveHtml, format) {
+    if (format == null) { format = "html"; }
+
+    if (format === "markdown") {
+        return markdownTextMarkdown(content, context);
+    } else if (format !== "html") {
+        throw new Error("unknown format: " + format);
+    }
+
     if (!preserveHtml) {
         // Collapse whitespace and escape HTML
         content = content.trim()
@@ -123,12 +207,14 @@ function markdownText(content, context, preserveHtml) {
     content = content.replace(/\\(.)/g, (all, chr) => (chr));
 
     // Links [name](href)
-    content = markdownLink(content, context, preserveHtml);
+    content = markdownLink(content, context, preserveHtml, format);
 
     return content;
 }
 
-function markdownParagraph(content, context) {
+function markdownParagraph(content, context, format) {
+    if (format == null) { format = "html"; }
+
     // Process Lists
     const lines = content.split("\n");
 
@@ -147,20 +233,34 @@ function markdownParagraph(content, context) {
             }
         });
 
-        if (header) {
-            header = `<p class="prelist">${ markdownText(header, context) }</p>`;
+        if (format === "html") {
+            if (header) {
+                header = `<p class="prelist">${ markdownText(header, context, false, format) }</p>`;
+            }
+            const items = points.map((point) => (`<li>${ markdownText(point.trim(), context, false, format) }</li>`)).join("");
+            return `${ header }<ul>${ items }</ul>`;
+
+        } else if (format === "markdown") {
+            const items = points.map((point) => (`* ${ markdownText(point.trim(), context, false, format) }`)).join("\n");
+            return `${ header }\n\n${ items }\n\n`
         }
 
-        const items = points.map((point) => (`<li>${ markdownText(point.trim(), context) }</li>`)).join("");
-
-        return `${ header }<ul>${ items }</ul>`;
+        throw new Error("unknown format: " + format)
     }
 
-    return `<p>${ markdownText(content, context) }</p>`;
+    if (format === "html") {
+        return `<p>${ markdownText(content, context, false, format) }</p>`;
+    } else if (format === "markdown") {
+        return `${ markdownText(content, context, false, format) }\n\n`;
+    }
+
+    throw new Error("unknown format: " + format)
 }
 
 // Split the markdown into paragraphs to process individually.
-function markdown(content, context) {
+function markdown(content, context, format) {
+    if (format == null) { format = "html"; }
+
     let result = "";
 
     const lines = content.trim().split("\n");
@@ -169,7 +269,7 @@ function markdown(content, context) {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.trim() === "") {
-            result += markdownParagraph(paragraph.join("\n"), context);
+            result += markdownParagraph(paragraph.join("\n"), context, format);
             paragraph = [ ];
         } else {
             paragraph.push(line);
@@ -177,7 +277,7 @@ function markdown(content, context) {
     }
 
     if (paragraph.length) {
-        result += markdownParagraph(paragraph.join("\n"), context);
+        result += markdownParagraph(paragraph.join("\n"), context, format);
     }
 
     return result;
@@ -195,51 +295,6 @@ function wrapRequire(name) {
     return require(name);
 }
 
-async function verifyCode(code) {
-    const lines = code.split("\n");
-
-    let contextObject = {
-        _inspect: function(result) { return JSON.stringify(result); },
-        console: console,
-        require: wrapRequire
-    };
-    let context = vm.createContext(contextObject);
-
-    let output = [ ];
-    let script = [ ];
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        if (line.trim().substring(0, 3) === "//!") {
-            let padding = line.substring(0, line.indexOf("/"));
-            try {
-                let result = await runContext(context, script.join("\n"));
-                output.push(`<span class="result ok">${ padding }// ${ result }</span>`);
-                if (line.replace(/\s/g, "").substring(0, ) !== "//!") { throw new Error("expected an Error"); }
-            } catch (error) {
-                if (line.replace(/\s/g, "").substring(0, ) !== "//!error") { throw error; }
-                output.push(`<span class="result error">${ padding }// Error: ${ error.message }</span>`);
-            }
-            script = [ ];
-        } else {
-            script.push(line);
-            if (line.replace(/\s/g, "").match(/\/\/[^<]/)) {
-                line = `<span class="comment">${ line }</span>`;
-            }
-            output.push(line);
-        }
-    }
-
-    if (lines.length) {
-        await runContext(context, script.join("\n"));
-    }
-
-    let show = output.join("\n").replace(/\/\/.* <hide>\n(?:.|\n)*?\/\/ <\/hide>/, "").trim();
-
-    return {
-        show: show.replace(/\n/g, "<br>")
-    }
-}
-
 /////////////////////////////
 // Node Structure
 
@@ -252,6 +307,7 @@ function Page (realpath, path, fragments) {
     this.context = null;
 
     this.fragments = fragments.filter((fragment) => {
+        fragment.page = this;
         if (fragment.tag === "title") {
             if (this.title != null) { throw new Error("duplicate _title definition"); }
             this.title = fragment.value;
@@ -309,7 +365,9 @@ Page.prototype.getToc = function() {
     return result;
 }
 
-Page.prototype.render = async function(options) {
+Page.prototype.render = async function(options, format) {
+    if (format == null) { format = "html"; }
+
     const getParent = (page) => {
         let comps = page.path.split("/");
         comps.pop();
@@ -326,19 +384,17 @@ Page.prototype.render = async function(options) {
         if (fragment.tag === "title" && title == null) {
             title = fragment.value;
         }
-        let render = await fragment.render(this, options);
-        body.push(render);
+        let content = await fragment.render(this, options, format);
+        body.push(content);
     }
     body = body.join("\n");
 
-    /*
-    let body = this.fragments.map((fragment) => {
-        if (fragment.tag === "title" && title == null) {
-            title = fragment.value;
+    if (format === "markdown") {
+        if (this.context.config.markdown && this.context.config.markdown.banner) {
+            body = this.context.config.markdown.banner + body;
         }
-        return await fragment.render(this);
-    }).join("\n");
-    */
+        return injectHash(body, format);
+    }
 
     let breadcrumbs = [ `<span class="current">${ this.title }</span>` ];
 
@@ -426,10 +482,10 @@ Page.prototype.render = async function(options) {
         }
     }
 
-    let sidebar = `<div class="header"><div class="logo"><a href="/"><div class="image"></div><div class="name">ethers.js</div><div class="version">v5.0</div></a></div></div><div class="toc"><div>${ sidelinks }</div></div>`;
+    let sidebar = `<div class="header"><div class="logo"><a href="/"><div class="image"></div><div class="name">${ this.context.config.title || "TITLE" }</div><div class="version">${ this.context.config.subtitle || "SUBTITLE" }</div></a></div></div><div class="toc"><div>${ sidelinks }</div></div>`;
     let copyright = `The content of this site is licensed under the <a href="https://choosealicense.com/licenses/cc-by-4.0/">Creative Commons Attribution 4.0 International License</a>.`;
 
-    return injectHash(`<html><head><title>${ this.title }</title><link rel="stylesheet" type="text/css" href="/static/style.css"></head><body><div class="sidebar">${ sidebar }</div><div class="content"><div class="breadcrumbs">${ breadcrumbs }</div>${ body }<div class="footer">${ linkPrevious } ${ linkNext }</div><div class="copyright">${ copyright }</div></div><script src="/script.js" type="text/javascript"></script></body></html>`);
+    return injectHash(`<html><head><title>${ this.title }</title><link rel="stylesheet" type="text/css" href="/static/style.css"></head><body><div class="sidebar">${ sidebar }</div><div class="content"><div class="breadcrumbs">${ breadcrumbs }</div>${ body }<div class="footer">${ linkPrevious } ${ linkNext }</div><div class="copyright">${ copyright }</div></div><script src="/script.js" type="text/javascript"></script></body></html>`, format);
 };
 
 
@@ -439,6 +495,7 @@ function Fragment (tag, value) {
     this.value = value.trim();
     this.link = null;
     this._lines = [ ];
+    this.path = null;
 
     // If we have a link, set it and remove it from the value
     let match = value.match(/^(.*)@<([^>]*)>\s*$/);
@@ -456,24 +513,117 @@ Fragment.prototype.getLines = function() {
     return this._lines.join("\n").trim().split("\n");
 }
 
-function renderName(text) {
-    let nameComps = text.split(".");
-    let result = `<span class="method">${ nameComps.pop() }</span>`;
-    if (nameComps.length) {
-        result = nameComps.map((n) => (`<span class="path">${ n }</span>`)).join(" . ") + " . " + result;
+Fragment.prototype._evalJavaScript = async function() {
+    if (this._evalJavaScriptCache) { return this._evalJavaScriptCache; }
+
+    const code = this.page.context.readFile(this.value);
+
+    const lines = code.split("\n");
+
+    const contextObject = {
+        _inspect: function(result) { return JSON.stringify(result); },
+        console: console,
+        require: wrapRequire
+    };
+    const context = vm.createContext(contextObject);
+
+    const output = [ ];
+    let script = [ ];
+    let showing = true;
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+
+        let stripped = line.replace(/\s/, "");
+        if (stripped.indexOf("//<hide>") === 0) {
+            showing = false;
+            continue;
+        } else if (stripped.indexOf("//</hide>") === 0) {
+            showing = true;
+            continue;
+        }
+
+        if (line.trim().substring(0, 3) === "//!") {
+            let padding = line.substring(0, line.indexOf("/"));
+            try {
+                let result = await runContext(context, script.join("\n"));
+                output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ result }` });
+                if (line.replace(/\s/g, "").substring(0, ) !== "//!") { throw new Error("expected an Error"); }
+            } catch (error) {
+                if (line.replace(/\s/g, "").substring(0, ) !== "//!error") { throw error; }
+                output.push({ classes: [ "result", "error" ], content: `${ padding }// Error: ${ error.message }` });
+            }
+            script = [ ];
+        } else {
+            script.push(line);
+
+            if (showing) {
+                let classes = [ ];
+                if (line.replace(/\s/g, "").match(/\/\/[^<]/)) {
+                    classes.push("comment");
+                }
+                output.push({ classes: classes, content: line });
+            }
+        }
     }
-    return result;
+
+    if (lines.length) {
+        await runContext(context, script.join("\n"));
+    }
+
+    this._evalJavaScriptCache = output;
+
+    return output;
 }
 
-function renderParams(text) {
+Fragment.prototype.evalJavaScript = async function(format) {
+    if (format == null) { format = "html"; }
+
+    const output = await this._evalJavaScript();
+    if (format === "html") {
+        return output.map((line) => {
+            if (line.classes.length) {
+                return `<span class="${ line.classes.join(" ") }">${ line.content }</span>`;
+            }
+            return line.content;
+        }).join("<br>");
+    } else if (format === "markdown") {
+        return output.map((line) => line.content).join("\n");
+    }
+    throw new Error("unknown format: " + format);
+}
+
+function renderName(text, format) {
+    let nameComps = text.split(".");
+    if (format === "html") {
+        let result = `<span class="method">${ nameComps.pop() }</span>`;
+        if (nameComps.length) {
+            result = nameComps.map((n) => (`<span class="path">${ n }</span>`)).join(" . ") + " . " + result;
+        }
+        return result;
+    } else if (format === "markdown") {
+        let result = `**${nameComps.pop() }**`;
+        if (nameComps.length) {
+            result = nameComps.map((n) => (`*${ n }*`)).join(" . ") + " . " + result;
+        }
+        return result;
+    }
+    throw new Error("unknown format: " + format);
+}
+
+function renderParams(text, format) {
     if (text == null || text.trim() === "") { return ""; }
 
     let result = text.replace(/([a-z0-9_]+)(?:=([^,\)]))?/ig, (all, key, defaultValue) => {
-        let result = `<span class="param">${ key }</span>`;
-        if (defaultValue) {
-            result += ` = <span class="default-value">${ defaultValue }</span>`;
+        if (format === "html") {
+            let result = `<span class="param">${ key }</span>`;
+            if (defaultValue) {
+                result += ` = <span class="default-value">${ defaultValue }</span>`;
+            }
+            return result;
+        } else if (format === "markdown") {
+            return all;
         }
-        return result;
+        throw new Error("unknown format: " + format);
     });
 
     result = result.replace(/([,\]\[\)\(])/g, (all, symbol) => {
@@ -483,89 +633,157 @@ function renderParams(text) {
     return result;
 }
 
-function renderReturns(text, context) {
+function renderReturns(text, context, format) {
     if (text == null || text.trim() === "") { return ""; }
-    text = markdownLink(text.trim(), context);
-    text = text.replace(/&gt;/g, "&thinsp;&gt;").replace(/&lt;/g, "&lt;&thinsp;");
-    return ` <span class="arrow">&rArr;</span> <span class="returns">${ text }</span>`
+    text = markdownLink(text.trim(), context, false, format);
+    if (format === "html") {
+        text = text.replace(/&gt;/g, "&thinsp;&gt;").replace(/&lt;/g, "&lt;&thinsp;");
+        return ` <span class="arrow">&rArr;</span> <span class="returns">${ text }</span>`
+    } else if (format === "markdown") {
+        text = text.replace(/>/g, " >").replace(/</g, "< ");
+        return ` **=>** *${ text }*`;
+    }
+    throw new Error("unknown format: " + format);
 }
 
-function renderFunction(text, context) {
+function renderFunction(text, context, format) {
     let prefix = "";
     text = text.trim();
     if (text.trim().substring(0, 4) === "new ") {
-        prefix = `<span class="modifier">new </span>`;
+        if (format === "html") {
+            prefix = `<span class="modifier">new </span>`;
+        } else if (format === "markdown") {
+            prefix = "**new** ";
+        }
         text = text.substring(4).trim();
     }
 
     let comps = text.replace(/\s/g, "").split("=>");
     if (comps.length > 2) { throw new Error("too many returns"); }
 
-    //let match = text.replace(/\s/g, "").match(/^([^\]]+)(\([^\)]*\))?(?:=>(.*))?$/);
     let match = comps[0].match(/^([^\]\(]+)(\([^\)]*\))?\s*$/);
     if (!match) { throw new Error("invalid function definition"); }
-    return (prefix + renderName(match[1]) + renderParams(match[2]) + renderReturns(comps[1] || null, context));
+    return (prefix + renderName(match[1], format) + renderParams(match[2], format) + renderReturns(comps[1] || null, context, format));
 }
 
-Fragment.prototype.render = async function(page, options) {
+function repeat(chr, length) {
+    let result = chr;
+    while (result.length < length) { result += result; }
+    return result.substring(0, length);
+}
+
+Fragment.prototype.render = async function(page, options, format) {
+    if (format == null) { format = "html"; }
+
     let result = "";
 
     // An alternate link name to include
-    if (this.link) { result += `<a name="${ namify(this.link) }"></a>`; }
+    if (format === "html") {
+        if (this.link) { result += `<a name="${ namify(this.link) }"></a>`; }
+    }
 
     const lines = this._lines.join("\n").trim();
 
     switch (this.tag) {
         case "null":
-            if (lines !== "") { result += markdown(lines, page.context); }
+            if (lines !== "") { result += markdown(lines, page.context, format); }
             break;
+
         case "section":
         case "subsection":
         case "heading":
-            let tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
-            result += `<a name="${ namify(this.value) }"></a><${ tag }>${ markdownText(this.value) }</${ tag }>`;
+            if (format === "html") {
+                let tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
+                result += `<a name="${ namify(this.value) }"></a><${ tag }>${ markdownText(this.value, page.context, false, format) }</${ tag }>`;
+            } else if (format === "markdown") {
+                if (this.tag === "heading") {
+                    result += `### ${ markdownText(this.value, page.context, false, format) }\n\n`;
+                } else {
+                    let underline = (({ section: "=", subsection: "-" })[this.tag]);
+                    let line = markdownText(this.value, page.context, false, format);
+                    result += `${ line }\n${ repeat(underline, line.length)}\n\n`;
+                }
+            }
             break;
+
         case "code":
             let code = page.context.readFile(this.value);
+            let kind = "";
             switch (extname(this.value)) {
                 case ".js":
+                    kind = "javascript";
                     if (options.skipeval) {
                         code = "Skipping JavaScript Evaluation.";
                     } else {
-                        code = (await verifyCode(code)).show;
+                        code = await this.evalJavaScript(format);
                     }
                     break;
                 case ".txt":
-                    code = code.trim().replace(/&/g, "&amp;")
-                           .replace(/ /g, "&nbsp;")
-                           .replace(/</g, "&lt;")
-                           .replace(/>/g, "&gt;")
-                           .replace(/\n/g, "<br>");
+                    if (format === "html") {
+                        code = code.trim().replace(/&/g, "&amp;")
+                               .replace(/ /g, "&nbsp;")
+                               .replace(/</g, "&lt;")
+                               .replace(/>/g, "&gt;")
+                               .replace(/\n/g, "<br>");
+                    }
                     break;
                 case ".source":
-                    code = code.split("\n").map((line) => {
-                        if (line.trim().substring(0, 2) === "//") {
-                            line = `<span class="comment">${ line }</span>`;
-                        }
-                        return line;
-                    }).join("<br>");
+                    if (format === "html") {
+                        code = code.split("\n").map((line) => {
+                            if (line.trim().substring(0, 2) === "//") {
+                               line = `<span class="comment">${ line }</span>`;
+                            }
+                            return line;
+                        }).join("<br>");
+                    }
                     break;
             }
-            result += `<div class="code">${ code }</div>`;
+
+            if (format === "html") {
+                result += `<div class="code">${ code }</div>`;
+            } else if (format === "markdown") {
+                return "```" + kind + "\n" + code.trim() + "\n```\n\n";
+            } else {
+                throw new Error("unknown format: " + format);
+            }
             break;
+
         case "definition":
-            result += `<div class="definition"><div class="term">${ markdownText(this.value, page.context) }</div><div class="body">${ markdown(lines, page.context) }</div></div>`;
+            if (format === "html") {
+                result += `<div class="definition"><div class="term">${ markdownText(this.value, page.context, false, format) }</div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
+            } else if (format === "markdown") {
+                result += `#### ${ markdownText(this.value, page.context, false, format) }\n\n${ markdown(lines, page.context, format) }\n\n`;
+            }
             break;
+
         case "property":
-            result += `<div class="property"><div class="signature">${ renderFunction(this.value, page.context) }</div><div class="body">${ markdown(lines, page.context) }</div></div>`;
+            if (format === "html") {
+                result += `<div class="property"><div class="signature">${ renderFunction(this.value, page.context, format) }</div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
+            } else if (format === "markdown") {
+                result += `#### ${ renderFunction(this.value, page.context, format) }\n\n${ markdown(lines, page.context, format) }\n\n`;
+            }
             break;
+
         case "toc":
             let items = "";
             page.getToc().slice(1).forEach((item) => {
-                items += `<div style="padding-left: ${ (item.depth - 1) * 28 }px"><span class="bullet">&bull;</span><a href="${ item.path }">${ item.title }</a></div>`
+                if (format === "html") {
+                    items += `<div style="padding-left: ${ (item.depth - 1) * 28 }px"><span class="bullet">&bull;</span><a href="${ item.path }">${ item.title }</a></div>`
+                } else if (format === "markdown") {
+                    items += `${ repeat(" ", (item.depth - 1) * 2) }* [${ item.title }](${ (relative(page.path, item.path.split("#")[0]) || "./") })\n`
+                }
             });
-            result += `<div class="toc">${ items }</div>`;
+
+            if (format === "html") {
+                result += `<div class="toc">${ items }</div>`;
+            } else if (format === "markdown") {
+                result += items += "\n";
+            } else {
+                throw new Error("unknown foramt: " + format);
+            }
+
             break;
+
         default:
             throw new Error("unknown tag: " + this.tag);
     }
@@ -620,9 +838,10 @@ function namify(words) {
     return words.toLowerCase().replace(/\s+/, " ").split(" ").join("-");
 }
 
-function Context(basepath, nodes) {
+function Context(basepath, nodes, config) {
     this.basepath = basepath;
     this.nodes = nodes;
+    this.config = (config || { });
 
     this._links = { };
     this.forEachPage((page) => {
@@ -708,15 +927,15 @@ function mkdir(dir) {
 }
 
 Context.prototype.render = async function(path, options) {
-    if (options == null) { options = { }; }
-
     this._toc = this.findPages({ path: "/" })[0].getToc(this);
     let pages = [ ];
     this.forEachPage((page) => { pages.push(page); });
 
+    // Copy over all static files
     mkdir(resolve(path, "./static/lato"));
     [
         "style.css",
+        "logo.svg",
         "lato/Lato-Regular.ttf",
         "lato/Lato-Black.ttf",
         "lato/Lato-Italic.ttf",
@@ -725,26 +944,41 @@ Context.prototype.render = async function(path, options) {
         fs.copyFileSync(resolve(__dirname, "./static", filename), resolve(path, "./static", filename));
     });
 
+    // If we have a custom logo, use it instead
+    if (this.config.logo) {
+        fs.copyFileSync(resolve(this.basepath, this.config.logo), resolve(path, "./static/logo.svg"));
+    }
+
+    const outputs = [
+        { format: "html", filename: "index.html" },
+        { format: "markdown", filename: "README.md" },
+    ];
+
     for (let i = 0; i < pages.length; i++) {
         let page = pages[i];
 
-        this._currentPage = page;
-        const filepath = resolve(path, "." + page.path + "/index.html")
         console.log("Render:", page.path);
 
-        const dir = dirname(filepath);
-        mkdir(dir);
+        this._currentPage = page;
 
-        try {
-            const existing = fs.readFileSync(filepath).toString();
-            if (!checkHash(existing) && !options.force) {
-                throw new Error("File modified since generation: " + filepath);
+        for (let i = 0; i < outputs.length; i++) {
+            let output = outputs[i];
+
+            const filepath = resolve(path, "." + page.path + "/" + output.filename);
+            mkdir(dirname(filepath));
+
+            try {
+                const existing = fs.readFileSync(filepath).toString();
+                if (!checkHash(existing, output.format) && !options.force) {
+                    throw new Error("File modified since generation: " + filepath);
+                }
+            } catch (error) {
+                if (error.code !== "ENOENT") { throw error; }
             }
-        } catch (error) {
-            if (error.code !== "ENOENT") { throw error; }
+
+            let render = await page.render(options, output.format);
+            fs.writeFileSync(filepath, render);
         }
-        let render = await page.render(options);
-        fs.writeFileSync(filepath, render);
     }
 
     this._currentPage = null;
@@ -753,6 +987,19 @@ Context.prototype.render = async function(path, options) {
 Context.fromFolder = function(path, basepath) {
     if (!basepath) { basepath = path; }
     basepath = resolve(basepath);
+
+
+    let config = { };
+    {
+        let data = null;
+        try {
+            data = fs.readFileSync(resolve(path, "config.json")).toString();
+        } catch (error) { }
+
+        if (data) {
+            config = JSON.parse(data);
+        }
+    }
 
     return new Context(basepath, fs.readdirSync(path).map((filename) => {
         const childpath = resolve(path, filename)
@@ -765,7 +1012,7 @@ Context.fromFolder = function(path, basepath) {
             return parseFile(childpath, basepath);
         }
         return null
-    }).filter((page) => (page != null)));
+    }).filter((page) => (page != null)), config);
 }
 
 module.exports = { Context }

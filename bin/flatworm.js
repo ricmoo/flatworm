@@ -77,7 +77,11 @@ function parseOpts(argv, Flags, Options) {
         }
     } catch (error) {
         showUsage();
-        console.log("Error: " + (debug ? error: error.message));
+        console.log("Error: " + error.message);
+        if (debug) {
+            console.log("");
+            console.log(error);
+        }
         console.log("");
     }
 })();
