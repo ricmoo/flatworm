@@ -149,10 +149,10 @@ function markdownTextMarkdown(content, context) {
         return "`" + body + "`";
     });
 
-    content = content.replace(/\\(.)/g, (all, chr) => (chr));
-
     // Links [name](href)
     content = markdownLink(content, context, false, "markdown");
+
+    content = content.replace(/\\(.)/g, (all, chr) => (chr));
 
     return content;
 }
@@ -193,7 +193,8 @@ function markdownText(content, context, preserveHtml, format) {
     });
 
     // //Italic//
-    content = content.replace(/(^|(?<!:))\/\/(.*?)(?<!:)\/\//g, (all, d0, body, d1) => {
+    //content = content.replace(/(^|(?<!:))\/\/(.*?)(?<!:)\/\//g, (all, d0, body, d1) => {
+    content = content.replace(/\/\/(.*?)\/\//g, (all, body) => {
         return `<i>${ body }</i>`
     });
 
@@ -204,10 +205,11 @@ function markdownText(content, context, preserveHtml, format) {
 
     content = content.replace(/---/g, "&mdash;");
     content = content.replace(/--/g, "&ndash;");
-    content = content.replace(/\\(.)/g, (all, chr) => (chr));
 
     // Links [name](href)
     content = markdownLink(content, context, preserveHtml, format);
+
+    content = content.replace(/\\(.)/g, (all, chr) => (chr));
 
     return content;
 }
@@ -469,7 +471,9 @@ Page.prototype.render = async function(options, format) {
 
     let linkPrevious = "", linkNext = "";
     if (pageIndex == null) {
-        linkNext = `<div class="nav next"><a href="${ navItems[0].path }">${ navItems[0].title }<span class="arrow">&rarr;</span></a></div>`;
+        if (navItems.length) {
+            linkNext = `<div class="nav next"><a href="${ navItems[0].path }">${ navItems[0].title }<span class="arrow">&rarr;</span></a></div>`;
+        }
     } else {
         if (pageIndex === 0) {
             let page = this.context.findPages({ path: "/" })[0];
@@ -492,16 +496,26 @@ Page.prototype.render = async function(options, format) {
 
 function Fragment (tag, value) {
     this.tag = tag;
-    this.value = value.trim();
+    //this.value = value.trim();
     this.link = null;
     this._lines = [ ];
     this.path = null;
+    this.meta = { }
 
     // If we have a link, set it and remove it from the value
-    let match = value.match(/^(.*)@<([^>]*)>\s*$/);
-    if (match) {
-        this.link = match[2];
-        this.value = match[1].trim(); //this.value.substring(0, this.value.indexOf("<")).trim();
+    while (true) {
+        const match = value.match(/^(.*)@([a-z0-9_]*)<([^>]*)>\s*$/i);
+        if (match) {
+            if (match[2]) {
+                this.meta[match[2].toLowerCase()] = match[3];
+            } else {
+                this.link = match[3];
+            }
+            value = match[1].trim(); //this.value.substring(0, this.value.indexOf("<")).trim();
+        } else {
+            this.value = value.trim();
+            break;
+        }
     }
 }
 
@@ -693,8 +707,9 @@ Fragment.prototype.render = async function(page, options, format) {
         case "subsection":
         case "heading":
             if (format === "html") {
-                let tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
-                result += `<a name="${ namify(this.value) }"></a><${ tag }>${ markdownText(this.value, page.context, false, format) }</${ tag }>`;
+                const selfLink = `<div class="anchors"><a class="self" href="#${ namify(this.link || this.value) }"></a></div>`
+                const tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
+                result += `<a name="${ namify(this.value) }"></a><${ tag } class="show-anchors"><div>${ markdownText(this.value, page.context, false, format) }${ selfLink }</div></${ tag }>`;
             } else if (format === "markdown") {
                 if (this.tag === "heading") {
                     result += `### ${ markdownText(this.value, page.context, false, format) }\n\n`;
@@ -748,9 +763,15 @@ Fragment.prototype.render = async function(page, options, format) {
             }
             break;
 
+        case "warning":
+        case "note":
         case "definition":
             if (format === "html") {
-                result += `<div class="definition"><div class="term">${ markdownText(this.value, page.context, false, format) }</div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
+                let selfLink = "";
+                if (this.link) {
+                     selfLink = `<div class="anchors"><a class="self" href="#${ namify(this.link) }"></a></div>`
+                }
+                result += `<div class="definition ${ (this.tag !== "definition") ? ("container-box " + this.tag): ""} show-anchors"><div class="term">${ markdownText(this.value, page.context, false, format) }${ selfLink }</div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
             } else if (format === "markdown") {
                 result += `#### ${ markdownText(this.value, page.context, false, format) }\n\n${ markdown(lines, page.context, format) }\n\n`;
             }
@@ -758,7 +779,15 @@ Fragment.prototype.render = async function(page, options, format) {
 
         case "property":
             if (format === "html") {
-                result += `<div class="property"><div class="signature">${ renderFunction(this.value, page.context, format) }</div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
+                let selfLink = "";
+                if (this.link) {
+                    selfLink = `<a class="self" href="#${ namify(this.link) }"></a>`;
+                }
+                let sourceLink = "";
+                if (this.meta.ts) {
+                    sourceLink = `<a class="source" href="${ page.context.searchTypeScript(this.meta.ts, this.value) }">source</a>`;
+                }
+                result += `<div class="property show-anchors"><div class="signature">${ renderFunction(this.value, page.context, format) }<div class="anchors">${ selfLink }${ sourceLink }</div></div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
             } else if (format === "markdown") {
                 result += `#### ${ renderFunction(this.value, page.context, format) }\n\n${ markdown(lines, page.context, format) }\n\n`;
             }
@@ -793,7 +822,7 @@ Fragment.prototype.render = async function(page, options, format) {
 /////////////////////////////
 // Parsing and Generation
 
-const DirectiveHasBody = { definition: true, "null": true, property: true, toc: true };
+const DirectiveHasBody = { definition: true, "null": true, note: true, property: true, toc: true, warning: true };
 function parseFile(path, basepath) {
     if (path.substring(0, basepath.length) !== basepath) {
         console.log(path, basepath);
@@ -838,6 +867,11 @@ function namify(words) {
     return words.toLowerCase().replace(/\s+/, " ").split(" ").join("-");
 }
 
+function getTypeScriptSearch(basepath) {
+
+    return fincTypeScript;
+}
+
 function Context(basepath, nodes, config) {
     this.basepath = basepath;
     this.nodes = nodes;
@@ -867,6 +901,55 @@ function Context(basepath, nodes, config) {
 
     this._currentPage = null;
 }
+
+Context.prototype.searchTypeScript = function(key, property) {
+
+    const comps = key.split(":");
+    if (comps.length > 2) { throw new Error("too many comps"); }
+    if (comps.length === 2 && comps[1] === "") { comps.pop(); }
+    if (comps.length === 1) { comps.push(property); }
+
+    const pathCheck = ("/" + comps[0] + "/");
+
+    let prop = comps[1];
+    let regex = null;
+    let type = "value";
+    if (prop.indexOf("(" /* Fix: ) */) >= 0) {
+        prop = prop.match(/([a-z0-9_$]+)\s*\(/i /* Fix: \) */)[1];
+        regex = new RegExp(`function\\s+${ prop }\\s*\\([^)]*:`);
+        type = "function";
+    } else {
+        prop = prop.split("=>")[0].split(".").pop().trim();
+        regex = new RegExp(`const\\s+${ prop }\\s*(:[^=]*)?\\s*=`);
+    }
+
+    console.log({ prop, type, regex });
+    //console.log(this.config.source);
+
+    const result = [ ];
+
+    const source = this.config.source.content;
+    for (let s = 0; s < source.length; s++) {
+        if (source[s].filename.indexOf(pathCheck) < 0) { continue; }
+        const lines = source[s].content.split("\n");
+        for (let l = 0; l < lines.length; l++) {
+            if (lines[l].match(regex)) {
+                result.push( { filename: source[s].filename, line: l });
+            }
+        }
+    }
+
+    if (result.length > 1) {
+        throw new Error(`Amibguous TypeScript link: path ~= "${ key }" key ~= "${ prop }"; matches: [ ${ result.map((r) => r.filename).join(", ") } ]`);
+    } else if (result.length === 0) {
+        throw new Error(`No matching TypeScript link: path ~= "${ key }" key ~= "${ prop }"`);
+    }
+
+    return this.config.source.link
+        .replace("$LINE", String(result[0].line + 1))
+        .replace("$FILENAME", result[0].filename);
+}
+
 
 Context.prototype.findPages = function(filter) {
     let result = [ ];
@@ -936,6 +1019,7 @@ Context.prototype.render = async function(path, options) {
     [
         "style.css",
         "logo.svg",
+        "link.svg",
         "lato/Lato-Regular.ttf",
         "lato/Lato-Black.ttf",
         "lato/Lato-Italic.ttf",
@@ -984,35 +1068,73 @@ Context.prototype.render = async function(path, options) {
     this._currentPage = null;
 }
 
-Context.fromFolder = function(path, basepath) {
-    if (!basepath) { basepath = path; }
-    basepath = resolve(basepath);
-
+Context.fromFolder = function(path) {
 
     let config = { };
     {
         let data = null;
         try {
             data = fs.readFileSync(resolve(path, "config.json")).toString();
-        } catch (error) { }
+        } catch (error) {
+            if (error.code !== "ENOENT") {
+                throw error;
+            }
+        }
 
         if (data) {
             config = JSON.parse(data);
         }
     }
 
-    return new Context(basepath, fs.readdirSync(path).map((filename) => {
-        const childpath = resolve(path, filename)
-        const stat = fs.statSync(childpath);
-        if (stat.isDirectory()) {
-            console.log("Processing Directroy:", childpath);
-            return Context.fromFolder(childpath, basepath).nodes;
-        } else if (extname(childpath) === ".wrm") {
-            console.log("  File:", childpath);
-            return parseFile(childpath, basepath);
+    // If we need to load source files for linking to
+    if (config.source) {
+        const root = resolve(path, config.source.path);
+
+        const include = new RegExp(config.source.include || ".*");
+        const exclude = new RegExp(config.source.exclude || "^\0$");
+
+        const readdir = function(path) {
+            if (path.match(exclude)) { return [ ]; }
+
+            const stat = fs.statSync(path);
+            if (stat.isDirectory()) {
+                return fs.readdirSync(path).reduce((result, filename) => {
+                    readdir(resolve(path, filename)).forEach((file) => {
+                        result.push(file);
+                    });
+                    return result;
+                }, [ ]);
+            }
+
+            if (path.match(include)) {
+                return [ { filename: path.substring(root.length), content: fs.readFileSync(path).toString() } ]
+            }
+
+            return [ ];
         }
-        return null
-    }).filter((page) => (page != null)), config);
+
+        config.source.content = readdir(root);
+    }
+
+    const readdir = function(path, basepath) {
+        if (!basepath) { basepath = path; }
+        basepath = resolve(basepath);
+
+        return fs.readdirSync(path).map((filename) => {
+            const childpath = resolve(path, filename)
+            const stat = fs.statSync(childpath);
+            if (stat.isDirectory()) {
+                console.log("Processing Directroy:", childpath);
+                return readdir(childpath, basepath);
+            } else if (extname(childpath) === ".wrm") {
+                console.log("  File:", childpath);
+                return parseFile(childpath, basepath);
+            }
+            return null
+        }).filter((page) => (page != null));
+    }
+
+    return new Context(resolve(path), readdir(path), config);
 }
 
 module.exports = { Context }
