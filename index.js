@@ -2,6 +2,7 @@
 
 const { createHash } = require("crypto");
 const fs = require("fs");
+const { createRequireFromPath } = require('module')
 const { basename, dirname, extname, relative, resolve } = require("path");
 const { inherit } = require("util");
 const vm = require("vm");
@@ -140,6 +141,7 @@ function markdownTextMarkdown(content, context) {
     });
 
     // //Italic//
+    //content = content.replace(/(^|(?<!:))\/\/(.*?)(?<!:)\/\//g, (all, d0, body, d1) => {
     content = content.replace(/(^|(?<!:))\/\/(.*?)(?<!:)\/\//g, (all, d0, body, d1) => {
         return `*${ body }*`;
     });
@@ -707,9 +709,18 @@ Fragment.prototype.render = async function(page, options, format) {
         case "subsection":
         case "heading":
             if (format === "html") {
-                const selfLink = `<div class="anchors"><a class="self" href="#${ namify(this.link || this.value) }"></a></div>`
+
+                let inherit = "";
+                if (this.meta.inherit) {
+                    inherit = `<span class="inherits"> inherits ${ markdownLink(this.meta.inherit.replace(/\s+/g, " "), page.context, true, format) }</span>`
+                }
+                let sourceLink = "";
+                if (this.meta.src) {
+                    sourceLink = `<a class="source" href="${ page.context.getSourceUrl(this.meta.src, this.value) }">source</a>`;
+                }
+                const selfLink = `<div class="anchors"><a class="self" href="#${ namify(this.link || this.value) }"></a>${ sourceLink }</div>`
                 const tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
-                result += `<a name="${ namify(this.value) }"></a><${ tag } class="show-anchors"><div>${ markdownText(this.value, page.context, false, format) }${ selfLink }</div></${ tag }>`;
+                result += `<a name="${ namify(this.value) }"></a><${ tag } class="show-anchors"><div>${ markdownText(this.value, page.context, false, format) }${ inherit }${ selfLink }</div></${ tag }>`;
             } else if (format === "markdown") {
                 if (this.tag === "heading") {
                     result += `### ${ markdownText(this.value, page.context, false, format) }\n\n`;
@@ -784,8 +795,8 @@ Fragment.prototype.render = async function(page, options, format) {
                     selfLink = `<a class="self" href="#${ namify(this.link) }"></a>`;
                 }
                 let sourceLink = "";
-                if (this.meta.ts) {
-                    sourceLink = `<a class="source" href="${ page.context.searchTypeScript(this.meta.ts, this.value) }">source</a>`;
+                if (this.meta.src) {
+                    sourceLink = `<a class="source" href="${ page.context.getSourceUrl(this.meta.src, this.value) }">source</a>`;
                 }
                 result += `<div class="property show-anchors"><div class="signature">${ renderFunction(this.value, page.context, format) }<div class="anchors">${ selfLink }${ sourceLink }</div></div><div class="body">${ markdown(lines, page.context, format) }</div></div>`;
             } else if (format === "markdown") {
@@ -867,9 +878,32 @@ function namify(words) {
     return words.toLowerCase().replace(/\s+/, " ").split(" ").join("-");
 }
 
-function getTypeScriptSearch(basepath) {
+function loadConfig(path) {
+    let configPath = resolve(path, "./config.js");
 
-    return fincTypeScript;
+    if (fs.existsSync(configPath)) {
+        const injected = { exports: { } };
+        const context = vm.createContext({
+            console: console,
+            __dirname: resolve(path),
+            __filename: configPath,
+            module: injected,
+            exports: injected.exports,
+            require: createRequireFromPath(configPath)
+        });
+
+        const script = new vm.Script(fs.readFileSync(configPath).toString(), { filename: "config.js" });
+        script.runInContext(context);
+
+        return injected.exports;
+    }
+
+    configPath = resolve(path, "./config.json");
+    if (fs.existsSync(configPath)) {
+        return JSON.parse(fs.readFileSync(configPath).toString());
+    }
+
+    return { };
 }
 
 function Context(basepath, nodes, config) {
@@ -902,54 +936,23 @@ function Context(basepath, nodes, config) {
     this._currentPage = null;
 }
 
-Context.prototype.searchTypeScript = function(key, property) {
-
-    const comps = key.split(":");
-    if (comps.length > 2) { throw new Error("too many comps"); }
-    if (comps.length === 2 && comps[1] === "") { comps.pop(); }
-    if (comps.length === 1) { comps.push(property); }
-
-    const pathCheck = ("/" + comps[0] + "/");
-
-    let prop = comps[1];
-    let regex = null;
-    let type = "value";
-    if (prop.indexOf("(" /* Fix: ) */) >= 0) {
-        prop = prop.match(/([a-z0-9_$]+)\s*\(/i /* Fix: \) */)[1];
-        regex = new RegExp(`function\\s+${ prop }\\s*\\([^)]*:`);
-        type = "function";
-    } else {
-        prop = prop.split("=>")[0].split(".").pop().trim();
-        regex = new RegExp(`const\\s+${ prop }\\s*(:[^=]*)?\\s*=`);
-    }
-
-    console.log({ prop, type, regex });
-    //console.log(this.config.source);
-
-    const result = [ ];
-
-    const source = this.config.source.content;
-    for (let s = 0; s < source.length; s++) {
-        if (source[s].filename.indexOf(pathCheck) < 0) { continue; }
-        const lines = source[s].content.split("\n");
-        for (let l = 0; l < lines.length; l++) {
-            if (lines[l].match(regex)) {
-                result.push( { filename: source[s].filename, line: l });
+Context.prototype.getSourceUrl = function(key, property) {
+    if (this.config.getSourceUrl) {
+        if (key.indexOf(":") < 0) {
+            property = property.split("=>")[0].trim();
+            if (property.indexOf("(" /* Fix: ) */) >= 0) {
+                property = property.match(/([a-z0-9_$]+)\s*\(/i /* Fix: \) */)[1];
+            } else {
+                property = property.split(".").pop().trim();
             }
+
+            key += ":" + property;
         }
-    }
 
-    if (result.length > 1) {
-        throw new Error(`Amibguous TypeScript link: path ~= "${ key }" key ~= "${ prop }"; matches: [ ${ result.map((r) => r.filename).join(", ") } ]`);
-    } else if (result.length === 0) {
-        throw new Error(`No matching TypeScript link: path ~= "${ key }" key ~= "${ prop }"`);
+        return this.config.getSourceUrl(key);
     }
-
-    return this.config.source.link
-        .replace("$LINE", String(result[0].line + 1))
-        .replace("$FILENAME", result[0].filename);
+    throw new Error("missing config.getSourceUrl");
 }
-
 
 Context.prototype.findPages = function(filter) {
     let result = [ ];
@@ -1068,53 +1071,8 @@ Context.prototype.render = async function(path, options) {
     this._currentPage = null;
 }
 
-Context.fromFolder = function(path) {
-
-    let config = { };
-    {
-        let data = null;
-        try {
-            data = fs.readFileSync(resolve(path, "config.json")).toString();
-        } catch (error) {
-            if (error.code !== "ENOENT") {
-                throw error;
-            }
-        }
-
-        if (data) {
-            config = JSON.parse(data);
-        }
-    }
-
-    // If we need to load source files for linking to
-    if (config.source) {
-        const root = resolve(path, config.source.path);
-
-        const include = new RegExp(config.source.include || ".*");
-        const exclude = new RegExp(config.source.exclude || "^\0$");
-
-        const readdir = function(path) {
-            if (path.match(exclude)) { return [ ]; }
-
-            const stat = fs.statSync(path);
-            if (stat.isDirectory()) {
-                return fs.readdirSync(path).reduce((result, filename) => {
-                    readdir(resolve(path, filename)).forEach((file) => {
-                        result.push(file);
-                    });
-                    return result;
-                }, [ ]);
-            }
-
-            if (path.match(include)) {
-                return [ { filename: path.substring(root.length), content: fs.readFileSync(path).toString() } ]
-            }
-
-            return [ ];
-        }
-
-        config.source.content = readdir(root);
-    }
+Context.fromFolder = function(path, config) {
+    if (!config) { config = loadConfig(path); }
 
     const readdir = function(path, basepath) {
         if (!basepath) { basepath = path; }
@@ -1137,4 +1095,7 @@ Context.fromFolder = function(path) {
     return new Context(resolve(path), readdir(path), config);
 }
 
-module.exports = { Context }
+module.exports = {
+    Context,
+    loadConfig
+}

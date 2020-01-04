@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { Context } = require("../index");
+const { Context, loadConfig } = require("../index");
 
 const { version } = require("../package.json");
 
@@ -72,7 +72,8 @@ function parseOpts(argv, Flags, Options) {
             if (opts.args.length !== 2) {
                 throw new Error("Requires exactly SRC_FOLDER DST_FOLDER");
             }
-            const nodes = Context.fromFolder(opts.args[0]);
+            const config = loadConfig(opts.args[0]);
+            const nodes = Context.fromFolder(opts.args[0], config);
             await nodes.render(opts.args[1], opts.flags);
         }
     } catch (error) {
