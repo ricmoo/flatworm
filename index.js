@@ -654,6 +654,7 @@ function renderReturns(text, context, format) {
     text = markdownLink(text.trim(), context, false, format);
     if (format === "html") {
         text = text.replace(/&gt;/g, "&thinsp;&gt;").replace(/&lt;/g, "&lt;&thinsp;");
+        text = text.replace(/\|/g, "&nbsp;&nbsp;|&nbsp;&nbsp;");
         return ` <span class="arrow">&rArr;</span> <span class="returns">${ text }</span>`
     } else if (format === "markdown") {
         text = text.replace(/>/g, " >").replace(/</g, "< ");
@@ -678,7 +679,7 @@ function renderFunction(text, context, format) {
     if (comps.length > 2) { throw new Error("too many returns"); }
 
     let match = comps[0].match(/^([^\]\(]+)(\([^\)]*\))?\s*$/);
-    if (!match) { throw new Error("invalid function definition"); }
+    if (!match) { throw new Error(`invalid function definition: ${ JSON.stringify(text) }`); }
     return (prefix + renderName(match[1], format) + renderParams(match[2], format) + renderReturns(comps[1] || null, context, format));
 }
 
@@ -912,6 +913,15 @@ function Context(basepath, nodes, config) {
     this.config = (config || { });
 
     this._links = { };
+
+    // Load any provided external links first
+    if (config.externalLinks) {
+        Object.keys(config.externalLinks).forEach((key) => {
+            const url = config.externalLinks[key]
+            this._links[key] = { anchor: url, name: url };
+        });
+    }
+
     this.forEachPage((page) => {
         page.context = this;
         page.fragments.forEach((fragment) => {
