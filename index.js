@@ -112,6 +112,9 @@ function markdownLink(content, context, preserveHtml, format) {
     // [Link Title](link)
     content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (all, title, url) => {
         if (url.indexOf(":") === -1) { url = context.getAnchor(url); }
+        title = title.replace(/([a-z0-9+])\.([a-z0-9_])/gi, (all, a, b) => {
+            return (a + "&thinsp;.&thinsp;" + b);
+        });
         return `<a href="${ url }">${ title }</a>`;
     });
 
@@ -122,6 +125,9 @@ function markdownLink(content, context, preserveHtml, format) {
             title = context.getName(url);
             url = context.getAnchor(url);
         }
+        title = title.replace(/([a-z0-9+])\.([a-z0-9_])/gi, (all, a, b) => {
+            return (a + "&thinsp;.&thinsp;" + b);
+        });
         return `<a href="${ url }">${ title }</a>`;
     });
 
@@ -205,8 +211,8 @@ function markdownText(content, context, preserveHtml, format) {
         return `<code class="inline">${ body }</code>`
     });
 
-    content = content.replace(/---/g, "&mdash;");
-    content = content.replace(/--/g, "&ndash;");
+    content = content.replace(/\s---\s/g, "&mdash;");
+    content = content.replace(/\s--\s/g, "&ndash;");
 
     // Links [name](href)
     content = markdownLink(content, context, preserveHtml, format);
@@ -306,15 +312,26 @@ function Page (realpath, path, fragments) {
     this.realpath = realpath;
     this.path = path;
     this.title = null;
+    this.navTitle = null;
     this.name = null;
     this.options = { };
     this.context = null;
 
-    this.fragments = fragments.filter((fragment) => {
+    this.fragments = fragments;
+
+    let parents = null;
+
+    this.fragments.forEach((fragment) => {
         fragment.page = this;
-        if (fragment.tag === "title") {
-            if (this.title != null) { throw new Error("duplicate _title definition"); }
+        if (fragment.tag === "section") {
+            if (this.title != null) { throw new Error("duplicate _section definition: " + realpath); }
+
             this.title = fragment.value;
+            if (fragment.meta.nav) { this.navTitle = fragment.meta.nav; }
+
+            fragment.parents = null;
+            parents = [ fragment ];
+
             let match = fragment.value.match(/<([^>]*)>/);
             if (match) {
                 this.name = match[1];
@@ -323,10 +340,24 @@ function Page (realpath, path, fragments) {
                     return word.substring(0, 1).toUpperCase() + word.substring(1).toLowerCase();
                 }).join("");
             }
-            return false;
+
+        } else if (fragment.tag === "subsection") {
+            if (parents == null) { throw new Error("subsection without section: " + realpath); }
+            fragment.parents = [ parents[0] ];
+            parents = [ parents[0], fragment ];
+
+        } else if (fragment.tag === "heading") {
+            if (parents.length < 1) { throw new Error("heading without subsection: " + realpath); }
+            fragment.parents = [ parents[0], parents[1] ];
+            while (parents.length > 2) { parents.pop(); }
+            while (parents.length < 2) { parents.push(null); }
+            parents.push(fragment);
+        } else {
+            fragment.parents = parents.slice();
         }
-        return true;
     });
+
+    if (this.title == null) { throw new Error("missing section"); }
 }
 
 Page.prototype.getToc = function() {
@@ -341,6 +372,7 @@ Page.prototype.getToc = function() {
             path: this.path,
             depth: 0
         });
+
         toc[0].getLines().forEach((child) => {
             child = child.trim();
             if (child === "") { return; }
@@ -360,7 +392,8 @@ Page.prototype.getToc = function() {
             if (depth == null) { return; }
             result.push({
                 title: fragment.value,
-                path: this.path + ((fragment.tag === "section") ? "": ("#" + namify(fragment.value))),
+                //path: this.path + ((fragment.tag === "section") ? "": ("#" + namify(fragment.value))),
+                path: this.path + ((fragment.tag === "section") ? "": ("#" + (fragment.link ||fragment.autoLink() ))),
                 depth: depth
             });
         });
@@ -384,11 +417,8 @@ Page.prototype.render = async function(options, format) {
 
     let body = [ ];
     for (let i = 0; i < this.fragments.length; i++) {
-        let fragment = this.fragments[i];
-        if (fragment.tag === "title" && title == null) {
-            title = fragment.value;
-        }
-        let content = await fragment.render(this, options, format);
+        const fragment = this.fragments[i];
+        const content = await fragment.render(this, options, format);
         body.push(content);
     }
     body = body.join("\n");
@@ -405,7 +435,7 @@ Page.prototype.render = async function(options, format) {
     let parent = getParent(this);
     let page = parent;
     while(page) {
-        breadcrumbs.unshift(`<a href="${ page.path }">${ page.title }</a>`)
+        breadcrumbs.unshift(`<a href="${ page.path }">${ page.navTitle || page.title }</a>`)
         page = getParent(page);
     }
     breadcrumbs = breadcrumbs.join("&nbsp;&nbsp;&raquo;&nbsp;&nbsp;");
@@ -498,18 +528,18 @@ Page.prototype.render = async function(options, format) {
 
 function Fragment (tag, value) {
     this.tag = tag;
-    //this.value = value.trim();
     this.link = null;
+    this.parents = null;
     this._lines = [ ];
     this.path = null;
     this.meta = { }
 
     // If we have a link, set it and remove it from the value
     while (true) {
-        const match = value.match(/^(.*)@([a-z0-9_]*)<([^>]*)>\s*$/i);
+        const match = value.match(/^(.*)@([a-z0-9_]*)<((?:[^>]|\\>)*)>\s*$/i);
         if (match) {
             if (match[2]) {
-                this.meta[match[2].toLowerCase()] = match[3];
+                this.meta[match[2].toLowerCase()] = match[3].replace("\\>", ">").replace("\\<", "<");
             } else {
                 this.link = match[3];
             }
@@ -586,9 +616,31 @@ Fragment.prototype._evalJavaScript = async function() {
         await runContext(context, script.join("\n"));
     }
 
+    // Trim off leading empty lines
+    while (output.length) {
+        if (output[0].content.trim() !== "") { break; }
+        output.splice(0, 1);
+    }
+
+    // Trim off trailing empty lines
+    while (output.length) {
+        if (output[output.length - 1].content.trim() !== "") { break; }
+        output.splice(output.length - 1, 1);
+    }
+
     this._evalJavaScriptCache = output;
 
     return output;
+}
+
+Fragment.prototype.autoLink = function() {
+    const components = [ ];
+    (this.parents || [ ]).forEach((fragment) => {
+        if (!fragment) { return; }
+        components.push(namify(fragment.link || fragment.value));
+    });
+    components.push(namify(this.link || this.value));
+    return components.join("--");
 }
 
 Fragment.prototype.evalJavaScript = async function(format) {
@@ -613,7 +665,8 @@ function renderName(text, format) {
     if (format === "html") {
         let result = `<span class="method">${ nameComps.pop() }</span>`;
         if (nameComps.length) {
-            result = nameComps.map((n) => (`<span class="path">${ n }</span>`)).join(" . ") + " . " + result;
+            const dot = '<span class="symbol">.</span>'
+            result = nameComps.map((n) => (`<span class="path">${ n }</span>`)).join(dot) + dot + result;
         }
         return result;
     } else if (format === "markdown") {
@@ -643,8 +696,12 @@ function renderParams(text, format) {
     });
 
     result = result.replace(/([,\]\[\)\(])/g, (all, symbol) => {
+        if (format === "html") {
+            return `<span class="symbol">${ symbol }</span>`;
+        }
         return " " + symbol + " ";
     });
+
 
     return result;
 }
@@ -715,13 +772,33 @@ Fragment.prototype.render = async function(page, options, format) {
                 if (this.meta.inherit) {
                     inherit = `<span class="inherits"> inherits ${ markdownLink(this.meta.inherit.replace(/\s+/g, " "), page.context, true, format) }</span>`
                 }
+
                 let sourceLink = "";
                 if (this.meta.src) {
                     sourceLink = `<a class="source" href="${ page.context.getSourceUrl(this.meta.src, this.value) }">source</a>`;
                 }
-                const selfLink = `<div class="anchors"><a class="self" href="#${ namify(this.link || this.value) }"></a>${ sourceLink }</div>`
+
+                const autoLink = this.autoLink();
+
+                let link = this.link;
+                let extraLink = "";
+
+                let selfLink = "";
+                if (link === "") {
+                    link = "no-link";
+                } else {
+                    if (link == null) {
+                        link = autoLink;
+                        console.log("  * " + link);
+                    } else {
+                        console.log("    " + link);
+                        extraLink = `<a name="${ link }"></a>`;
+                    }
+                    selfLink = `<div class="anchors"><a class="self" href="#${ link }"></a>${ sourceLink }</div>`
+                }
+
                 const tag = ({ section: "h1", subsection: "h2", heading: "h3" })[this.tag];
-                result += `<a name="${ namify(this.value) }"></a><${ tag } class="show-anchors"><div>${ markdownText(this.value, page.context, false, format) }${ inherit }${ selfLink }</div></${ tag }>`;
+                result += `<a name="${ autoLink }"></a>${ extraLink }<${ tag } class="show-anchors"><div>${ markdownText(this.value, page.context, false, format) }${ inherit }${ selfLink }</div></${ tag }>`;
             } else if (format === "markdown") {
                 if (this.tag === "heading") {
                     result += `### ${ markdownText(this.value, page.context, false, format) }\n\n`;
@@ -794,6 +871,7 @@ Fragment.prototype.render = async function(page, options, format) {
                 let selfLink = "";
                 if (this.link) {
                     selfLink = `<a class="self" href="#${ namify(this.link) }"></a>`;
+                    console.log("    " + this.link);
                 }
                 let sourceLink = "";
                 if (this.meta.src) {
@@ -826,7 +904,7 @@ Fragment.prototype.render = async function(page, options, format) {
             break;
 
         default:
-            throw new Error("unknown tag: " + this.tag);
+            throw new Error(`unknown tag ${ this.tag }: ${ page.realpath } `);
     }
     return result;
 }
@@ -876,12 +954,13 @@ function titlize(words) {
 }
 
 function namify(words) {
-    return words.toLowerCase().replace(/\s+/, " ").split(" ").join("-");
+    return words.toLowerCase().replace(/[^a-z0-9_-]+/gi, " ").split(" ").filter((w) => (!!w)).join("-");
 }
 
 function loadConfig(path) {
     let configPath = resolve(path, "./config.js");
 
+    // Try loading a JavaScript config
     if (fs.existsSync(configPath)) {
         const injected = { exports: { } };
         const context = vm.createContext({
@@ -899,11 +978,13 @@ function loadConfig(path) {
         return injected.exports;
     }
 
+    // Try loading a JSON config
     configPath = resolve(path, "./config.json");
     if (fs.existsSync(configPath)) {
         return JSON.parse(fs.readFileSync(configPath).toString());
     }
 
+    // Just use defaults
     return { };
 }
 
@@ -918,7 +999,13 @@ function Context(basepath, nodes, config) {
     if (config.externalLinks) {
         Object.keys(config.externalLinks).forEach((key) => {
             const url = config.externalLinks[key]
-            this._links[key] = { anchor: url, name: url };
+            if (typeof(url) === "string") {
+                this._links[key] = { anchor: url, name: url };
+            } else if (typeof(url.url) === "string" && typeof(url.name) === "string") {
+                this._links[key] = { anchor: url.url, name: url.name };
+            } else {
+                throw new Error("invalid external link");
+            }
         });
     }
 
@@ -928,7 +1015,10 @@ function Context(basepath, nodes, config) {
             if (fragment.link) {
                 let existing = this._links[fragment.link];
                 if (existing) {
-                    let error = new Error("duplicate tag: " + fragment.link);
+                    const dedup = { };
+                    dedup[page.realpath] = true;
+                    dedup[existing.location] = true;
+                    let error = new Error(`duplicate tag: ${ fragment.link } (${ Object.keys(dedup).map((l) => JSON.stringify(l)).join(", ") })`);
                     error.previousLocations = existing.location;
                     error.location = page.realpath;
                     throw error;
@@ -1073,7 +1163,7 @@ Context.prototype.render = async function(path, options) {
                 if (error.code !== "ENOENT") { throw error; }
             }
 
-            let render = await page.render(options, output.format);
+            const render = await page.render(options, output.format);
             fs.writeFileSync(filepath, render);
         }
     }

@@ -91,7 +91,7 @@ div.code {
     padding: 15px 20px;
     font-family: monospace;
     font-size: 18px;
-    white-space: nowrap;
+    white-space: pre;
     overflow: scroll;
 }
 
@@ -475,6 +475,11 @@ code.inline {
 
 .property .signature .param {
     font-style: italic;
+}
+
+.property .signature .symbol {
+   padding-left: 4px;
+   padding-right: 4px;
 }
 
 .property .arrow {
