@@ -9,6 +9,7 @@ export type ConfigLink = Readonly<{ name: string, url: string }>;
 
 export class Config {
     readonly externalLinks: Readonly<{ [ name: string ]: ConfigLink }>;
+    readonly _getSourceUrl: (key: string) => string;
 
     constructor(config: any) {
         const links: { [ name: string ]: ConfigLink } = { };
@@ -26,6 +27,39 @@ export class Config {
         }
         this.externalLinks = Object.freeze(links);
 
+        if (config.getSourceUrl) {
+            this._getSourceUrl = config.getSourceUrl;
+        }
+
+
+    }
+
+    getSourceUrl(key: string, value: string): string {
+        // For a fragment styled like:
+        // - _property: foo.bar(test) @SRC<somefile:somekey>
+        //   => key=somefile:somekey
+        // - _property: foo.bar(test) => anything @SRC<somefile>
+        //   => key=somefile:bar
+        // - _property: foo.bar => anything @SRC<somefile>
+        //   => key=somefile:bar
+
+        if (this._getSourceUrl) {
+            // No property given in the key, try to extract it from the value
+            if (key.indexOf(":") === -1) {
+                value = value.split("=>")[0].trim();
+                if (value.indexOf("(" /* Fix: ) */) >= 0) {
+                    value = value.match(/([a-z0-9_$]+)\s*\(/i /* Fix: \) */)[1];
+                } else {
+                    value = value.split(".").pop().trim();
+                }
+
+                key += ":" + value;
+            }
+
+            return this._getSourceUrl(key);
+        }
+
+        throw new Error("missing config.getSourceUrl");
     }
 
     static fromRoot(path: string): Config {
