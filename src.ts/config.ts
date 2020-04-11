@@ -2,13 +2,29 @@
 
 import fs from "fs";
 const { createRequireFromPath } = require('module')
-import { resolve } from "path";
+import { dirname, resolve } from "path";
 const vm = require("vm");
 
 export type ConfigLink = Readonly<{ name: string, url: string }>;
 
 export class Config {
+    // Documentation Header
+    readonly title: string;
+    readonly subtitle: string;
+    readonly logo: string;
+
+    // The link the documentations will be deployed to
+    readonly link: string;
+
+    // The copyright included on each page
+    readonly copyright: string;
+
+    // The root that require will operate against when evaluating _code:
+    readonly codeRoot: string;
+
+    // The external links provided in the config
     readonly externalLinks: Readonly<{ [ name: string ]: ConfigLink }>;
+
     readonly _getSourceUrl: (key: string) => string;
 
     constructor(config: any) {
@@ -27,11 +43,15 @@ export class Config {
         }
         this.externalLinks = Object.freeze(links);
 
-        if (config.getSourceUrl) {
-            this._getSourceUrl = config.getSourceUrl;
-        }
+        this._getSourceUrl = config.getSourceUrl || null;
 
+        this.title = config.title || "Documentation";
+        this.subtitle = config.subtitle || "";
+        this.subtitle = config.logo || "";
+        this.link = config.link || null;
+        this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
 
+        this.codeRoot = config.codeRoot || null;
     }
 
     getSourceUrl(key: string, value: string): string {
@@ -87,10 +107,12 @@ export class Config {
     }
 
     static fromScript(path: string): Config {
+        path = resolve(path);
+
         const injected = { exports: { } };
         const context = vm.createContext({
             console: console,
-            __dirname: resolve(path),
+            __dirname: dirname(path),
             __filename: path,
             module: injected,
             exports: injected.exports,

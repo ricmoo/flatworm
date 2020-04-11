@@ -3,26 +3,39 @@
 import fs from "fs";
 import { basename, dirname, extname, resolve } from "path";
 
-import { Config } from "./config";
+import type { Config } from "./config";
+import type { Script } from "./scripts";
 
 // Directive Attributes
 // - body:     true if a directive supports having a body
 // - title:    true is a directive supports markup in its value
 const Directives: Readonly<{ [ tag: string ]: { body: boolean, title: boolean } }> = Object.freeze({
-    section: { body: false, title: true },
-    subsection: { body: false, title: true },
-    heading: { body: false, title: true },
-    definition: { body: true, title: true },
-    property: { body: true, title: false },
-    code: { body: false, title: true },
-    toc: { body: true, title: false },
-    "null": { body: true, title: false },
-    note: { body: true, title: false },
-    warning: { body: true, title: false }
+    section: { body: false, title: true, exts: [ "inherit", "src" ] },
+    subsection: { body: false, title: true, exts: [ "inherit", "src" ] },
+    heading: { body: false, title: true, exts: [ "inherit", "src" ] },
+    definition: { body: true, title: true, exts: [ ] },
+    property: { body: true, title: false, exts: [ "src" ] },
+    code: { body: false, title: true, exts: [ ] },
+    toc: { body: true, title: false, exts: [ ] },
+    "null": { body: true, title: false, exts: [ ] },
+    note: { body: true, title: false, exts: [ ] },
+    warning: { body: true, title: false, exts: [ ] }
 });
 
 
-export abstract class Node { }
+export abstract class Node {
+    #document: Document;
+    _setDocument(document: Document): void {
+        if (this.#document) { throw new Error("already has a document"); }
+        this.#document = document;
+    }
+
+    get document(): Document {
+        return this.#document;
+    }
+
+    abstract get textContent(): string;
+}
 
 export class TextNode extends Node {
     readonly content: string;
@@ -30,6 +43,10 @@ export class TextNode extends Node {
     constructor(content: string) {
         super();
         this.content = content;
+    }
+
+    get textContent(): string {
+        return this.content;
     }
 }
 
@@ -75,7 +92,16 @@ export class ElementNode extends Node {
                 return child;
             });
         }
-        this.children = Object.freeze(children);
+        this.children = Object.freeze(<Array<Node>>children);
+    }
+
+    _setDocument(document: Document): void {
+        super._setDocument(document);
+        this.children.forEach((c) => c._setDocument(document));
+    }
+
+    get textContent(): string {
+        return this.children.map((c) => c.textContent).join("");
     }
 }
 
@@ -124,9 +150,33 @@ export class PropertyNode extends ElementNode {
     }
 }
 
+export enum FragmentType {
+    SECTION      = "section",
+    SUBSECTION   = "subsection",
+    HEADING      = "heading",
+
+    DEFINITION   = "definition",
+    PROPERTY     = "property",
+
+    NOTE         = "note",
+    WARNING      = "warning",
+
+    CODE         = "code",
+    NULL         = "null",
+
+    TOC          = "toc"
+};
+
+function getFragmentType(name: string): FragmentType {
+    if (!Directives[name]) {
+        throw new Error("unknown fragment type: " + name);
+    }
+
+    return <FragmentType>name;
+}
 
 export class Fragment {
-    readonly tag: string;
+    readonly tag: FragmentType;
     readonly value: string;
     readonly link: string;
 
@@ -135,10 +185,10 @@ export class Fragment {
 
     readonly extensions: Readonly<{ [ extension: string ]: string }>;
 
-    constructor(tag: string, value: string, body: string) {
+    constructor(tag: FragmentType, value: string, body: Array<Node>) {
         this.tag = tag;
 
-        this.body = Object.freeze(parseMarkdown(body));
+        this.body = Object.freeze(body);
 
         const exts: { [ name: string ]: string } = { }
         while (true) {
@@ -154,7 +204,7 @@ export class Fragment {
         }
         this.value = value.trim();
 
-        if (this.tag === "property") {
+        if (this.tag === FragmentType.PROPERTY) {
             let sig = this.value;
 
             const isConstructor = (sig.substring(0, 4) === "new ");
@@ -166,12 +216,13 @@ export class Fragment {
             const match = comps[0].match(/^([^\x5d(]+)(\([^)]*\))?\s*$/);
             if (!match) { throw new Error(`invalid function definition: ${ JSON.stringify(sig) }`); }
 
-            let returns = (comps[1] ? parseBlock(comps[1]): null);
+            let returns = (comps[1] ? parseBlock(comps[1], [ MarkdownStyle.LINK ]): null);
 
             this.title = new PropertyNode(isConstructor, match[1], match[2] || null, returns);
 
         } else if (Directives[tag].title) {
-            this.title = parseBlock(this.value);
+            this.title = parseBlock(this.value, StylesAll);
+
         } else {
             this.title = null;
         }
@@ -179,32 +230,219 @@ export class Fragment {
         this.extensions = Object.freeze(exts);
     }
 
-    _setParent(parent: Page): void {
-        if (this.#page) { throw new Error("parent already set"); }
-        this.#page = parent;
+    _setDocument(document: Document): void {
+        this.body.forEach((n) => n._setDocument(document));
+        if (this.title) { this.title._setDocument(document); }
     }
 
     #page: Page;
-    get page(): Page {
-        return this.#page;
+    #autoLink: string;
+    _setPage(parent: Page, parents: Array<Fragment>): void {
+        if (this.#page) { throw new Error("parent already set"); }
+        this.#page = parent;
+
+        // Compute the autoLink from the hierarchal-parent fragments
+        const components = [ ];
+        (parents || [ ]).forEach((fragment) => {
+            if (!fragment) { return; }
+            components.push(fragment.link || namify(fragment.value));
+        });
+        components.push(this.link || namify(this.value));
+
+        this.#autoLink = components.join("--");
     }
+
+    get page(): Page { return this.#page; }
+    get autoLink(): string { return this.#autoLink; }
 
     getExtension(name: string): string {
         const result = this.extensions[name.toLowerCase()];
         if (result == null) { return null; }
         return result;
     }
+
+    static from(tag: FragmentType, value: string, body: string): Fragment {
+        switch (tag) {
+            case FragmentType.CODE:
+                return new CodeFragment(value);
+            case FragmentType.TOC:
+                return new TocFragment(body);
+        }
+        return new Fragment(tag, value, parseMarkdown(body));
+    }
 }
+
+export type Line = {
+    classes: Array<string>,
+    content: string
+};
+
+export class CodeFragment extends Fragment {
+    readonly _filename: string
+
+    constructor(filename: string) {
+        super(FragmentType.CODE, filename, [ ]);
+        this._filename = filename;
+    }
+
+    get filename(): string {
+        return resolve(dirname(this.page.filename), this._filename);
+    }
+
+    #source: string;
+    get source(): string {
+        if (this.#source == null) {
+            //const path = thisresolve(dirname(this.page.filename), this.filename);
+            this.#source = fs.readFileSync(this.filename).toString();
+        }
+        return this.#source;
+    }
+
+    get language(): string {
+        switch (extname(this.filename)) {
+            case ".js":     return "javascript";
+            case ".txt":    return "text";
+            case ".source": return "source"
+        }
+        return "unknown";
+    }
+
+    #code: ReadonlyArray<Line>;
+    get code(): ReadonlyArray<Line> {
+        if (this.#code == null) {
+            throw new Error("code not evaluated");
+        }
+        return this.#code;
+    }
+
+    async evaluate(script: Script): Promise<void> {
+        if (this.#code) {
+            throw new Error("code already evaluated");
+        }
+
+        if (this.language === "javascript") {
+           this.#code = Object.freeze(await script.run(this.filename, this.source));
+        }
+    }
+
+    get evaluated(): boolean {
+        return (this.#code != null);
+    }
+
+}
+
+export class TocFragment extends Fragment {
+    readonly items: ReadonlyArray<string>;
+
+    constructor(body: string) {
+        super(FragmentType.TOC, "", [ ]);
+        this.items = Object.freeze(body.split("\n").map((l) => l.trim()).filter((l) => l.length));
+    }
+}
+
+export type TocEntry = {
+    depth: number,
+    title: string,
+    path: string,
+};
 
 export class Page {
     readonly fragments: ReadonlyArray<Fragment>;
     readonly filename: string;
+    readonly title: string;
 
     constructor(filename: string, fragments: Array<Fragment>) {
         this.filename = resolve(filename);
         this.fragments = Object.freeze(fragments);
 
-        this.fragments.forEach((fragment) => fragment._setParent(this));
+/*
+*/
+
+        let title: string = null;
+        let parents: Array<Fragment> = null;
+        this.fragments.forEach((fragment) => {
+            switch (fragment.tag) {
+                case FragmentType.SECTION:
+                    if (title != null) { throw new Error("too many _section: directives"); }
+                    title = fragment.title.textContent;
+                    fragment._setPage(this, null);
+                    parents = [ fragment ];
+                    break;
+                case FragmentType.SUBSECTION:
+                    if (parents == null) { throw new Error("subsection without section"); }
+                    fragment._setPage(this, [ parents[0] ]);
+                    parents = [ parents[0], fragment ];
+                    break;
+                case FragmentType.HEADING:
+                    if (parents.length < 1) { throw new Error("heading without subsection"); }
+                    fragment._setPage(this, [ parents[0], parents[1] ]);
+                    while (parents.length > 2) { parents.pop(); }
+                    while (parents.length < 2) { parents.push(null); }
+                    parents.push(fragment);
+                    break;
+                default:
+                    fragment._setPage(this, parents);
+            }
+        });
+
+        if (title == null) {
+            throw new Error("missing _section: directive");
+        }
+
+        this.title = title;
+    }
+
+    #toc: ReadonlyArray<Readonly<TocEntry>>;
+    get toc(): ReadonlyArray<Readonly<TocEntry>> {
+        if (this.#toc == null) {
+            const toc: Array<TocEntry> = [ ];
+
+            const tocFragments = this.fragments.filter((f) => (f.tag === FragmentType.TOC));
+            if (tocFragments.length > 1) {
+                throw new Error("too many _toc: directives");
+
+            } else if (tocFragments.length === 1) {
+                const fragment = tocFragments[0];
+                if (!(fragment instanceof TocFragment)) {
+                    throw new Error("invlaid toc fragment");
+                }
+                toc.push(Object.freeze({ depth: 0, title: this.title, path: this.path }));
+                fragment.items.forEach((item) => {
+                    const path = this.path + item + "/";
+                    const pages = this.document.pages.filter((p) => (p.path === path));
+                    if (pages.length !== 1) {
+                        throw new Error("duplicate page path"); //@TODO: Move this check
+                    }
+                    pages[0].toc.forEach((item) => {
+                        const depth = item.depth + 1;
+                        const title = item.title;
+                        const path = item.path;
+                        toc.push(Object.freeze({ depth, title, path }));
+                    });
+                });
+
+            } else {
+                this.fragments.forEach((fragment) => {
+                    let depth = 0;
+                    let path = this.path;
+                    switch (fragment.tag) {
+                        case FragmentType.SECTION:
+                            break;
+                        case FragmentType.SUBSECTION:
+                            depth = 1;
+                            path += `#${ fragment.link || fragment.autoLink }`
+                            break;
+                        default:
+                            return;
+                    }
+                    const title = fragment.title.textContent;
+                    toc.push(Object.freeze({ depth, title, path }));
+                });
+            }
+
+            this.#toc = Object.freeze(toc);
+        }
+        return this.#toc;
     }
 
     #document: Document;
@@ -235,15 +473,20 @@ export class Page {
         return this.#pathCache;
     }
 
-    _setParent(parent: Document): void {
+    loadFile(path: string): string {
+        return null;
+    }
+
+    _setDocument(document: Document): void {
         if (this.#document) { throw new Error("parent already set"); }
-        this.#document = parent;
+        this.#document = document;
+        this.fragments.forEach((f) => f._setDocument(document));
     }
 
     static fromFile(filename: string): Page {
         const fragments: Array<Fragment> = [];
 
-        let tag: string = null;
+        let tag: FragmentType = null;
         let value: string = null;
         let body: Array<string> = [ ];
 
@@ -257,11 +500,11 @@ export class Page {
 
                 // Commit any started fragment
                 if (tag) {
-                    fragments.push(new Fragment(tag, value, body.join("\n").trim()));
+                    fragments.push(Fragment.from(tag, value, body.join("\n").trim()));
                 }
 
                 // Start a new fragment
-                tag = match[1].trim();
+                tag = getFragmentType(match[1].trim());
                 value = match[2].trim();
                 body = [ ];
 
@@ -273,11 +516,11 @@ export class Page {
 
                     // ...commit any started fragment
                     if (tag) {
-                        fragments.push(new Fragment(tag, value, body.join("\n").trim()));
+                        fragments.push(Fragment.from(tag, value, body.join("\n").trim()));
                     }
 
                     // ...start a new fragment
-                    tag = "null";
+                    tag = FragmentType.NULL;
                     value = "";
                     body = [ ];
                 }
@@ -289,7 +532,7 @@ export class Page {
 
         // Commit any left over started fragment
         if (tag) {
-            fragments.push(new Fragment(tag, value, body.join("\n").trim()));
+            fragments.push(Fragment.from(tag, value, body.join("\n").trim()));
         }
 
         return new Page(resolve(filename), fragments);
@@ -315,7 +558,7 @@ export class Document {
         this.pages = Object.freeze(pages);
         this.config = config;
 
-        pages.forEach((page) => page._setParent(this));
+        pages.forEach((page) => page._setDocument(this));
 
         const links: { [ name: string ]: Link } = { };
         if (config.externalLinks) {
@@ -341,7 +584,7 @@ export class Document {
                     links[fragment.link] = Object.freeze({
                         name: fragment.value.replace(/(\*\*|\/\/|__|\^\^|``)/g, ""),
                         source: page.filename,
-                        url: (page.path + ((fragment.tag !== "section") ? ("#" + fragment.link): ""))
+                        url: (page.path + ((fragment.tag !== FragmentType.SECTION) ? ("#" + fragment.link): ""))
                     });
                 }
             });
@@ -350,16 +593,42 @@ export class Document {
         this.#links = Object.freeze(links);
     }
 
+    get copyright(): Array<Node> {
+        return this.parseMarkdown(this.config.copyright);
+    }
+
     getLinkName(name: string): string {
-        return this.#links[name].name;
+        const link = this.#links[name];
+        if (link == null) { throw new Error(`missing link "${ name }"`); }
+        return link.name;
     }
 
     getLinkUrl(name: string): string {
-        return this.#links[name].url;
+        const link = this.#links[name];
+        if (link == null) { throw new Error(`missing link "${ name }"`); }
+        return link.url;
+    }
+
+    parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node> {
+        const nodes = parseMarkdown(markdown, styles);
+        nodes.forEach((n) => n._setDocument(this));
+        return nodes;
+    }
+
+    async evaluate(script: Script): Promise<void> {
+        for (let p = 0; p < this.pages.length; p++) {
+            const page = this.pages[p];
+            for (let f = 0; f < page.fragments.length; f++) {
+                const fragment = page.fragments[f];
+                if (fragment instanceof CodeFragment) {
+                    await fragment.evaluate(script);
+                }
+            }
+        }
     }
 
     static fromFolder(path: string, config: Config) {
-        if (!config) { config = Config.fromRoot(path); }
+        //if (!config) { config = Config.fromRoot(path); }
 
         const readdir = function(path: string, basepath?: string): Array<Page> {
             if (!basepath) { basepath = path; }
@@ -373,7 +642,11 @@ export class Document {
                     return readdir(childpath, basepath);
                 } else if (extname(childpath) === ".wrm") {
 //                    console.log("  File:", childpath);
-                    return [ Page.fromFile(childpath) ];
+                    try {
+                        return [ Page.fromFile(childpath) ];
+                    } catch (error) {
+                        throw new Error(`${ error.message } [${ childpath }]`);
+                    }
                 }
                 return [ ];
             }).reduce((accum: Array<Page>, pages: Array<Page>) => {
@@ -385,6 +658,10 @@ export class Document {
 //        console.log("Processing Directroy:", resolve(path));
         return new Document(resolve(path), readdir(path), config);
     }
+}
+
+function namify(words: string): string {
+    return words.toLowerCase().replace(/[^a-z0-9_-]+/gi, " ").split(" ").filter((w) => (!!w)).join("-");
 }
 
 // Breaks markdown into blocks. Blocks are separated by an empty line
@@ -411,7 +688,8 @@ function splitBlocks(markdown: string): Array<string> {
 // Convert backslash escape sequences into their correct character
 export function escapeText(text: string): TextNode {
     // Do not allow a trailing backslash
-    if (text.match(/(\\*)$/)[1].length % 2) {
+    const backslashes = text.match(/(\\*)$/);
+    if (backslashes && backslashes[1].length % 2) {
         throw new Error("strat backslash escape sequence");
     }
 
@@ -419,24 +697,36 @@ export function escapeText(text: string): TextNode {
     return new TextNode(text.replace(/\\(.)/g, (all, char) => char));
 }
 
-const WrapTypes: { [ sym: string ]: ElementStyle } = {
-    "**": ElementStyle.BOLD,
-    "/\/": ElementStyle.ITALIC,
-    "__": ElementStyle.UNDERLINE,
-    "^^": ElementStyle.SUPER,
-    "``": ElementStyle.CODE,
+export enum MarkdownStyle {
+    BOLD       = "bold",
+    ITALIC     = "italic",
+    UNDERLINE  = "underline",
+    CODE       = "code",
+    SUPER      = "super",
+    LINK       = "link",
+    LIST       = "list",
 };
 
-/*
-function simplify(el: Node): Array<Node> {
-    if (el instanceof ElementNode && el.style === ElementStyle.NORMAL) {
-        return el.children.slice();
-    }
-    return [ el ];
-}
-*/
-function simplify(result: Array<Node>, markdown: string): Array<Node> {
-    const node = parseBlock(markdown);
+const StylesAll = [
+    MarkdownStyle.BOLD,
+    MarkdownStyle.ITALIC,
+    MarkdownStyle.UNDERLINE,
+    MarkdownStyle.CODE,
+    MarkdownStyle.SUPER,
+    MarkdownStyle.LINK,
+    MarkdownStyle.LIST,
+];
+
+const WrapTypes: { [ sym: string ]: ElementStyle } = {
+    "**":   ElementStyle.BOLD,
+    "/\/":  ElementStyle.ITALIC,
+    "__":   ElementStyle.UNDERLINE,
+    "^^":   ElementStyle.SUPER,
+    "``":   ElementStyle.CODE,
+};
+
+function simplify(result: Array<Node>, markdown: string, styles: Array<MarkdownStyle>): Array<Node> {
+    const node = parseBlock(markdown, styles);
     if (node instanceof ElementNode && node.style === ElementStyle.NORMAL) {
         node.children.forEach((c) => { result.push(c); });
     } else {
@@ -447,11 +737,11 @@ function simplify(result: Array<Node>, markdown: string): Array<Node> {
 }
 
 // splitBlocks should be called first to make the list is split properly;
-function parseBlock(markdown: string): Node {
+function parseBlock(markdown: string, styles: Array<MarkdownStyle>): Node {
     if (markdown === "") { return new TextNode(""); } // @TODO: something better? Filter...
 
     // Check for lists...
-    if (markdown.trim()[0] === "-") {
+    if (markdown.trim()[0] === "-" && styles.indexOf(MarkdownStyle.LIST)) {
 
         const points: Array<string> = [ ];
         markdown.split("\n").forEach((line) => {
@@ -463,65 +753,93 @@ function parseBlock(markdown: string): Node {
             }
         });
 
-        return new ListNode(points.map((point) => parseBlock(point)));
+        return new ListNode(points.map((point) => parseBlock(point, styles)));
     }
 
     // No list, so remove newlines and unnecessary spaces (do not trim)
     markdown = markdown.replace(/\s+/g, " ");
 
+    // We want to process inline markdown from left-to-right, so we need
+    // to find all possible inline candidates to find the left-most
+    const candidates: Array<{ offset: number, callback: () => Node }> = [ ];
+
     // Check for links...
     // - "[[" /[a-z0-9_-]+/ "]]"
     // - "[" /* fix: [ */ not("]") "](" /[a-z0-9._&$+,/:;=?@#%-]+/ ")"
-    let match = markdown.match(/^((?:.|\n)*?)(\[\[([a-z0-9_-]+)\]\]|\[([^\x5d]+)\]\(([a-z0-9._~'!*:@,;&$+/=?@#%-]+)\))((?:.|\n)*)$/i);
-    if (match) {
-        const result: Array<Node> = [ ];
-        simplify(result, match[1]);
-        if (match[3]) {
-            result.push(new LinkNode(match[3], [ ]));
-        } else {
-            // NOTE: We could support markdown for link names here, but
-            //       this complicates things (e.g. need to prohibit nested
-            //       links) as well as makes rendering engines harder.
-            //result.push(new LinkNode(match[5], parseBlock(match[4])));
-            result.push(new LinkNode(match[5], [ escapeText(match[4]) ]));
-        }
-        simplify(result, match[6]);
+    const matchLink = markdown.match(/^((?:.|\n)*?)(\[\[([a-z0-9_-]+)\]\]|\[([^\x5d]+)\]\(([a-z0-9._~'!*:@,;&$+/=?@#%-]+)\))((?:.|\n)*)$/i);
+    if (matchLink && styles.indexOf(MarkdownStyle.LINK) !== -1) {
+        candidates.push({
+            offset: matchLink[1].length,
+            callback: () => {
+                const result: Array<Node> = [ ];
+                simplify(result, matchLink[1], styles);
+                if (matchLink[3]) {
+                    result.push(new LinkNode(matchLink[3], [ ]));
+                } else {
+                    // NOTE: We could support markdown for link names here, but
+                    //       this complicates things (e.g. need to prohibit nested
+                    //       links) as well as makes rendering engines harder.
+                    //result.push(new LinkNode(matchLink[5], parseBlock(matchLink[4])));
+                    result.push(new LinkNode(matchLink[5], [ escapeText(matchLink[4]) ]));
+                }
+                simplify(result, matchLink[6], styles);
 
-        if (result.length === 1) { return result[0]; }
-        return new ElementNode(ElementStyle.NORMAL, result);
+                if (result.length === 1) { return result[0]; }
+                return new ElementNode(ElementStyle.NORMAL, result);
+            }
+        });
     }
 
     // Check for bold, italic, underline, superscript, and inline code...
-    match = markdown.match(/^((?:.|\n)*?)(\*\*|\/\/|__|\^\^|``)((?:.|\n)*)$/);
-    if (match) {
-        const type = WrapTypes[match[2]];
-        const open = match[1].length;
-        const close = markdown.indexOf(match[2], open + 2);
-        if (close === -1) { throw new Error(`missing closing "${ match[2] }"`); }
+    const matchStyle = markdown.match(/^((?:.|\n)*?)(\*\*|\/\/|__|\^\^|``)((?:.|\n)*)$/);
+    if (matchStyle && styles.indexOf(<any>WrapTypes[matchStyle[2]]) !== -1) {
+        candidates.push({
+            offset: matchStyle[1].length,
+            callback: () => {
+                const type = WrapTypes[matchStyle[2]];
+                const open = matchStyle[1].length;
+                const close = markdown.indexOf(matchStyle[2], open + 2);
+                if (close === -1) {
+                    throw new Error(`missing closing "${ matchStyle[2] }" near ${ JSON.stringify(markdown) }`);
+                }
 
-        const result: Array<Node> = [ ];
-        if (match[1]) {
-            simplify(result, match[1]);
-        }
-        //result.push(new ElementNode(type, simplify(parseBlock(markdown.substring(open + 2, close)))));
-        result.push(new ElementNode(type, simplify([ ], markdown.substring(open + 2, close))));
-        if (close + 2 < markdown.length) {
-            simplify(result, markdown.substring(close + 2));
-        }
+                const result: Array<Node> = [ ];
+                if (matchStyle[1]) {
+                    simplify(result, matchStyle[1], styles);
+                }
+                //result.push(new ElementNode(type, simplify(parseBlock(markdown.substring(open + 2, close)))));
+                result.push(new ElementNode(type, simplify([ ], markdown.substring(open + 2, close), styles)));
+                if (close + 2 < markdown.length) {
+                    simplify(result, markdown.substring(close + 2), styles);
+                }
 
-        if (result.length === 1) { return result[0]; }
-        return new ElementNode(ElementStyle.NORMAL, result);
+                if (result.length === 1) { return result[0]; }
+                return new ElementNode(ElementStyle.NORMAL, result);
+            }
+        });
+    }
+
+    if (candidates.length) {
+        const leftmost = candidates.reduce((accum, candidate) => {
+             if (accum.offset == null || accum.offset > candidate.offset) {
+                 return candidate;
+             }
+             return accum;
+        }, { offset: null, callback: null });
+        return leftmost.callback();
     }
 
     return escapeText(markdown);
 }
 
-export function parseMarkdown(markdown: string): Array<Node> {
+export function parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node> {
+    if (styles == null) { styles = StylesAll; }
     return splitBlocks(markdown).map((block) => {
-        const el = parseBlock(block);
+        const el = parseBlock(block, styles);
         if (el instanceof ElementNode && el.style === ElementStyle.NORMAL && el.children.length === 1) {
             return el.children[0];
         }
         return el;
     });
 }
+
