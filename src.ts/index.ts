@@ -26,7 +26,7 @@ export {
     FragmentType
 } from "./document"
 
-export { Config, MarkdownConfig } from "./config"
+export { Config, ConfigLink, MarkdownConfig } from "./config"
 export { Line, Script } from "./script"
 
 export { File, Renderer } from "./renderer"

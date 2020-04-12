@@ -15,9 +15,9 @@ type DirectiveInfo = {
 };
 
 const Directives: Readonly<{ [ tag: string ]: DirectiveInfo }> = Object.freeze({
-    section:     { title: true,               exts: [ "inherit", "src" ] },
-    subsection:  { title: true,               exts: [ "inherit", "src" ] },
-    heading:     { title: true,               exts: [ "inherit", "src" ] },
+    section:     { title: true,               exts: [ "inherit", "note", "nav", "src" ] },
+    subsection:  { title: true,               exts: [ "inherit", "note", "src" ] },
+    heading:     { title: true,               exts: [ "inherit", "note", "src" ] },
     definition:  { body: true, title: true,   exts: [ ] },
     property:    { body: true,                exts: [ "src" ] },
     code:        { title: true,               exts: [ ] },
@@ -84,7 +84,11 @@ export class Fragment {
             if (!match) { break; }
 
             if (match[2]) {
-                exts[match[2].toLowerCase()] = match[3].replace("\\>", ">").replace("\\<", "<");
+                const extName = match[2].toLowerCase();
+                if (Directives[tag].exts.indexOf(extName) === -1) {
+                    throw new Error(`_${ tag }: does not support ${ JSON.stringify(extName.toUpperCase()) } extension`);
+                }
+                exts[extName] = match[3].replace("\\>", ">").replace("\\<", "<");
             } else {
                 this.link = match[3];
             }
@@ -129,7 +133,7 @@ export class Fragment {
 
         } else {
             if (this.value.trim() !== "") {
-                throw new Error(`unsupported value in ${ this.tag }`);
+                throw new Error(`_${ tag }: does not support VALUE`);
             }
             this.title = null;
         }
@@ -228,14 +232,14 @@ export class CodeFragment extends Fragment {
     #code: ReadonlyArray<Line>;
     get code(): ReadonlyArray<Line> {
         if (this.#code == null) {
-            throw new Error("code not evaluated");
+            throw new Error("CodeFragment must be evaluate to access code");
         }
         return this.#code;
     }
 
     async evaluate(script: Script): Promise<void> {
         if (this.#code) {
-            throw new Error("code already evaluated");
+            throw new Error("CodeFragment already evaluated");
         }
 
         if (this.language === "javascript") {
@@ -274,19 +278,19 @@ export class Page {
         this.fragments.forEach((fragment) => {
             switch (fragment.tag) {
                 case FragmentType.SECTION:
-                    if (title != null) { throw new Error("too many _section: directives"); }
+                    if (title != null) { throw new Error("only one _section: allowed"); }
                     title = fragment.title.textContent;
                     sectionFragment = fragment;
                     fragment._setPage(this, null);
                     parents = [ fragment ];
                     break;
                 case FragmentType.SUBSECTION:
-                    if (parents == null) { throw new Error("subsection without section"); }
+                    if (parents == null) { throw new Error("_subsection: missing _section:"); }
                     fragment._setPage(this, [ parents[0] ]);
                     parents = [ parents[0], fragment ];
                     break;
                 case FragmentType.HEADING:
-                    if (parents.length < 1) { throw new Error("heading without subsection"); }
+                    if (parents.length < 1) { throw new Error("_heading: missing _subsection:"); }
                     fragment._setPage(this, [ parents[0], parents[1] ]);
                     while (parents.length > 2) { parents.pop(); }
                     while (parents.length < 2) { parents.push(null); }
@@ -298,7 +302,7 @@ export class Page {
         });
 
         if (title == null) {
-            throw new Error("missing _section: directive");
+            throw new Error("missing _section:");
         }
 
         this.title = title;
@@ -312,7 +316,7 @@ export class Page {
 
             const tocFragments = this.fragments.filter((f) => (f.tag === FragmentType.TOC));
             if (tocFragments.length > 1) {
-                throw new Error("too many _toc: directives");
+                throw new Error("only one _toc: allowed");
 
             } else if (tocFragments.length === 1) {
                 const fragment = tocFragments[0];
@@ -371,7 +375,7 @@ export class Page {
         if (!this.#pathCache) {
             const basepath = this.#document.basepath;
             if (this.filename.substring(0, basepath.length) !== basepath) {
-                throw new Error("bad file location");
+                throw new Error("path outside basepath");
             }
 
             let path = this.filename.substring(basepath.length);
