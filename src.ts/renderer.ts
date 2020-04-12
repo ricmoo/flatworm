@@ -63,7 +63,6 @@ export class Renderer {
     }
 
     renderDocument(document: Document): Array<File> {
-        console.dir(document.getPage("/api/utils/address/"), { depth: null });
         return document.pages.map((page) => {
             return {
                 filename: this.pageFilename(page),
