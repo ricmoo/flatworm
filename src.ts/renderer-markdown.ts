@@ -1,7 +1,10 @@
 
-import { CodeFragment, Fragment, FragmentType, Page } from "./document";
+import { relative } from "path";
+
+import { CodeFragment, Fragment, FragmentType, Page, TocFragment } from "./document";
 import { ElementStyle, ElementNode, LinkNode, ListNode, Node } from "./document";
 import { Renderer } from "./renderer";
+
 
 function repeat(c: string, length: number): string {
     if (c.length === 0) { throw new Error("ugh..."); }
@@ -74,6 +77,14 @@ export class MarkdownRenderer extends Renderer {
             }
 
             return ("```\n" + fragment.source + "```\n\n");
+
+        } else if (fragment instanceof TocFragment) {
+            const page = fragment.page;
+            return page.toc.slice(1).map((entry) => {
+                const depth = (entry.depth - 1) * 2;
+                const link = relative(page.path, entry.path.split("#")[0]) || "./";
+                return `${ repeat(" ", depth) }* [${ entry.title }](${ link })\n`
+            }).join("") + "\n";
         }
 
         switch (fragment.tag) {
