@@ -1,10 +1,14 @@
 "use strict";
 
+import fs from "fs";
+import { resolve } from "path";
+
 import { CodeFragment, Document, Fragment, Page, TocFragment } from "./document";
 import { ElementNode, LinkNode, ListNode, Node, PropertyNode, TextNode } from "./document";
 import { ElementStyle, FragmentType, MarkdownStyle } from "./document";
 
-const PageHeader = `
+
+const PageHeader = `<!DOCTYPE html>
 <html>
   <head>
     <title><!--TITLE--></title>
@@ -37,7 +41,7 @@ const PageFooter = `
 
 export type File = {
     filename: string;
-    content: string;
+    content: Buffer | string;
 }
 
 const Tags: { [ style: string ]: string } = { };
@@ -354,11 +358,26 @@ function renderFragment(fragment: Fragment, renderOptions?: RenderOptions): stri
     return output.join("");
 }
 
-export function renderPage(page: Page, renderOptions?: RenderOptions): string {
-    const output = [ ];
+type HeaderOptions = {
+    breadcrumbs?: boolean
+};
 
-    const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
-    {
+type FooterOptions = {
+    nudges?: boolean
+};
+
+function renderHeader(page: Page, options: HeaderOptions): string {
+    if (!options) { options = { }; }
+
+    let header = PageHeader
+                 .replace("<!--TITLE-->", (page.title || "Documentation"))
+                 .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
+                 .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
+                 .replace("<!--SIDEBAR-->", renderSidebar(page))
+
+    if (options.breadcrumbs) {
+        const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
+
         let path = page.path;
         while (path !== "/") {
             path = path.match(/(.*\/)([^/]+\/)/)[1];
@@ -366,25 +385,16 @@ export function renderPage(page: Page, renderOptions?: RenderOptions): string {
             const title = (p.sectionFragment.getExtension("nav") || p.title);
             breadcrumbs.unshift(`<a href="${ p.path }">${ title }</a>`)
         }
+
+        header = header.replace("<!--BREADCRUMBS-->", breadcrumbs.join("&nbsp;&nbsp;&raquo;&nbsp;&nbsp;"));
     }
 
-    // Add the HTML header
-    const header = PageHeader
-                   .replace("<!--TITLE-->", (page.title || "Documentation"))
-                   .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
-                   .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
-                   .replace("<!--SIDEBAR-->", renderSidebar(page))
-                   .replace("<!--BREADCRUMBS-->", breadcrumbs.join("&nbsp;&nbsp;&raquo;&nbsp;&nbsp;"));
-    output.push(header);
 
-    // Render all the Fragments
-    for (let f = 0; f < page.fragments.length; f++) {
-        try {
-            output.push(renderFragment(page.fragments[f]));
-        } catch (error) {
-            throw new Error(`${ error.message } [${ page.filename }]`);
-        }
-    }
+    return header;
+}
+
+function renderFooter(page: Page, options: FooterOptions): string {
+    if (options == null) { options = { }; }
 
     // Add the copyright to the footer
     let footer = PageFooter.replace("<!--COPYRIGHT-->", renderHtml(page.document.copyright));
@@ -404,19 +414,72 @@ export function renderPage(page: Page, renderOptions?: RenderOptions): string {
         }
     });
 
+    return footer;
+}
+
+export function renderPage(page: Page, renderOptions?: RenderOptions): string {
+    const output = [ ];
+
+    // Add the HTML header
+    output.push(renderHeader(page, { breadcrumbs: true }));
+
+    // Render all the Fragments
+    for (let f = 0; f < page.fragments.length; f++) {
+        try {
+            output.push(renderFragment(page.fragments[f]));
+        } catch (error) {
+            throw new Error(`${ error.message } [${ page.filename }]`);
+        }
+    }
+
     // Add the HTML footer
-    output.push(footer);
+    output.push(renderFooter(page, { nudges: true }));
 
     return output.join("\n");
 }
 
 export function renderDocument(document: Document, options?: RenderOptions): Array<File> {
     const files: Array<File> = [ ];
+
+    // Copy all static files
+    [
+        "link.svg",
+        "lato/index.html",
+        "lato/Lato-Italic.ttf",
+        "lato/Lato-Black.ttf",
+        "lato/Lato-Regular.ttf",
+        "lato/Lato-BlackItalic.ttf",
+        "lato/OFL.txt",
+        "lato/README.txt",
+        "script.js",
+        "style.css"
+    ].forEach((filename) => {
+        files.push({
+            filename: `static/${ filename }`,
+            content: fs.readFileSync(resolve(__dirname, "../static", filename))
+        });
+    });
+
+    // Copy over the logo, allowing for a custom override
+    if (document.config.logo) {
+        files.push({
+            filename: "static/logo.svg",
+            content: fs.readFileSync(resolve(document.basepath, document.config.logo))
+        });
+    } else {
+        files.push({
+            filename: "static/logo.svg",
+            content: fs.readFileSync(resolve(__dirname, "../static/logo.svg"))
+        });
+    }
+
+    // Render each Page
     for (let p = 0; p < document.pages.length; p++) {
         const page = document.pages[p];
         const filename = page.path.substring(1) + "index.html";
         const content = renderPage(page);
         files.push({ filename, content });
     }
+
     return files;
 }
