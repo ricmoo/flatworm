@@ -47,7 +47,7 @@ export class Config {
 
         this.title = config.title || "Documentation";
         this.subtitle = config.subtitle || "";
-        this.subtitle = config.logo || "";
+        this.logo = config.logo || "";
         this.link = config.link || null;
         this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
 

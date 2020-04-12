@@ -6,6 +6,8 @@ import { basename, dirname, extname, resolve } from "path";
 import type { Config } from "./config";
 import type { Script } from "./scripts";
 
+// @TOOD: Move markdown related things into its own file.
+
 // Directive Attributes
 // - body:     true if a directive supports having a body
 // - title:    true is a directive supports markup in its value
@@ -111,6 +113,14 @@ export class LinkNode extends ElementNode {
     constructor(link: string, children: string | Array<string | Node>) {
         super(ElementStyle.LINK, children);
         this.link = link;
+    }
+
+    get textContent(): string {
+        if (this.children.length === 0) {
+            console.log(this.link);
+            return this.document.getLinkName(this.link);
+        }
+        return super.textContent;
     }
 }
 
@@ -230,16 +240,34 @@ export class Fragment {
         this.extensions = Object.freeze(exts);
     }
 
+    // The Page that contains this
+    #page: Page;
+    get page(): Page { return this.#page; }
+
+    // An automatically generated  link target for this
+    #autoLink: string;
+    get autoLink(): string { return this.#autoLink; }
+
+    // The closest heading, subsection or section Fragment that contains this
+    #parent: Fragment;
+    get parent(): Fragment { return this.#parent; }
+
+
     _setDocument(document: Document): void {
         this.body.forEach((n) => n._setDocument(document));
         if (this.title) { this.title._setDocument(document); }
     }
 
-    #page: Page;
-    #autoLink: string;
-    _setPage(parent: Page, parents: Array<Fragment>): void {
+    _setPage(page: Page, parents: Array<Fragment>): void {
         if (this.#page) { throw new Error("parent already set"); }
-        this.#page = parent;
+        this.#page = page;
+
+        // Set the immediate parent fragmet
+        if (parents) {
+            this.#parent = parents.filter((p) => (p != null)).pop();
+        } else {
+            this.#parent = null;
+        }
 
         // Compute the autoLink from the hierarchal-parent fragments
         const components = [ ];
@@ -252,8 +280,6 @@ export class Fragment {
         this.#autoLink = components.join("--");
     }
 
-    get page(): Page { return this.#page; }
-    get autoLink(): string { return this.#autoLink; }
 
     getExtension(name: string): string {
         const result = this.extensions[name.toLowerCase()];
@@ -262,6 +288,7 @@ export class Fragment {
     }
 
     static from(tag: FragmentType, value: string, body: string): Fragment {
+        // Some special cases
         switch (tag) {
             case FragmentType.CODE:
                 return new CodeFragment(value);
@@ -292,7 +319,6 @@ export class CodeFragment extends Fragment {
     #source: string;
     get source(): string {
         if (this.#source == null) {
-            //const path = thisresolve(dirname(this.page.filename), this.filename);
             this.#source = fs.readFileSync(this.filename).toString();
         }
         return this.#source;
@@ -350,21 +376,21 @@ export class Page {
     readonly fragments: ReadonlyArray<Fragment>;
     readonly filename: string;
     readonly title: string;
+    readonly sectionFragment: Fragment;
 
     constructor(filename: string, fragments: Array<Fragment>) {
         this.filename = resolve(filename);
         this.fragments = Object.freeze(fragments);
 
-/*
-*/
-
         let title: string = null;
+        let sectionFragment: Fragment = null;
         let parents: Array<Fragment> = null;
         this.fragments.forEach((fragment) => {
             switch (fragment.tag) {
                 case FragmentType.SECTION:
                     if (title != null) { throw new Error("too many _section: directives"); }
                     title = fragment.title.textContent;
+                    sectionFragment = fragment;
                     fragment._setPage(this, null);
                     parents = [ fragment ];
                     break;
@@ -390,6 +416,7 @@ export class Page {
         }
 
         this.title = title;
+        this.sectionFragment = sectionFragment;
     }
 
     #toc: ReadonlyArray<Readonly<TocEntry>>;
@@ -403,17 +430,21 @@ export class Page {
 
             } else if (tocFragments.length === 1) {
                 const fragment = tocFragments[0];
+
+                // Appease TypeScript...
                 if (!(fragment instanceof TocFragment)) {
                     throw new Error("invlaid toc fragment");
                 }
+
                 toc.push(Object.freeze({ depth: 0, title: this.title, path: this.path }));
+
                 fragment.items.forEach((item) => {
                     const path = this.path + item + "/";
-                    const pages = this.document.pages.filter((p) => (p.path === path));
-                    if (pages.length !== 1) {
-                        throw new Error("duplicate page path"); //@TODO: Move this check
+                    const page = this.document.getPage(path);
+                    if (page == null) {
+                        throw new Error(`missing toc page %{ JSON.stringify(item) }`);
                     }
-                    pages[0].toc.forEach((item) => {
+                    page.toc.forEach((item) => {
                         const depth = item.depth + 1;
                         const title = item.title;
                         const path = item.path;
@@ -442,13 +473,12 @@ export class Page {
 
             this.#toc = Object.freeze(toc);
         }
+
         return this.#toc;
     }
 
     #document: Document;
-    get document(): Document {
-        return this.#document;
-    }
+    get document(): Document { return this.#document; }
 
     #pathCache: string;
     get path(): string {
@@ -471,10 +501,6 @@ export class Page {
         }
 
         return this.#pathCache;
-    }
-
-    loadFile(path: string): string {
-        return null;
     }
 
     _setDocument(document: Document): void {
@@ -572,7 +598,15 @@ export class Document {
             });
         }
 
+        const uniquePaths: { [ path: string ]: boolean } = { };
         this.pages.forEach((page) => {
+            // Make sure page paths are all unique (this can happen
+            // if there is are two files "foo/index.wrm" and "foo.wrm")
+            if (uniquePaths[page.path]) {
+                throw new Error(`duplicate page path ${ JSON.stringify(page.path) }`);
+            }
+            uniquePaths[page.path] = true;
+
             page.fragments.forEach((fragment) => {
                 if (fragment.link) {
                     const existing = links[fragment.link];
@@ -607,6 +641,20 @@ export class Document {
         const link = this.#links[name];
         if (link == null) { throw new Error(`missing link "${ name }"`); }
         return link.url;
+    }
+
+    getPage(path: string): Page {
+        return this.pages.filter((p) => (p.path === path))[0] || null;
+    }
+
+    #toc: ReadonlyArray<Readonly<TocEntry>>;
+    get toc(): ReadonlyArray<Readonly<TocEntry>> {
+        if (this.#toc == null) {
+            const rootPage = this.getPage("/");
+            if (rootPage == null) { throw new Error("missing root page"); }
+            this.#toc = rootPage.toc.filter((e) => (e.path.indexOf("#") === -1))
+        }
+        return this.#toc;
     }
 
     parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node> {
@@ -645,6 +693,7 @@ export class Document {
                     try {
                         return [ Page.fromFile(childpath) ];
                     } catch (error) {
+                        console.log(error.stack);
                         throw new Error(`${ error.message } [${ childpath }]`);
                     }
                 }

@@ -1,33 +1,34 @@
 "use strict";
 
-import { CodeFragment, Document, Fragment, Page } from "./document";
+import { CodeFragment, Document, Fragment, Page, TocFragment } from "./document";
 import { ElementNode, LinkNode, ListNode, Node, PropertyNode, TextNode } from "./document";
 import { ElementStyle, FragmentType, MarkdownStyle } from "./document";
 
 const PageHeader = `
 <html>
   <head>
-     <link rel="stylesheet" type="text/css" href="/static/style.css">
+    <title><!--TITLE--></title>
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
   </head>
   <body>
     <div class="sidebar">
       <div class="header">
-        <div class="logo"><a href="/"><div class="image"></div><div class="name">%%TITLE%%</div><div class="version">%%SUBTITLE%%</div></a></div>
+        <div class="logo"><a href="/"><div class="image"></div><div class="name"><!--BANNER_TITLE--></div><div class="version"><!--BANNER_SUBTITLE--></div></a></div>
       </div>
       <div class="toc"><div>
-        %%TOC%%
+        <!--SIDEBAR-->
       </div></div>
     </div>
     <div class="content">
-      <div class="breadcrumbs">TODO</div>
+      <div class="breadcrumbs"><!--BREADCRUMBS--></div>
 `;
 
 const PageFooter = `
       <div class="footer">
-        <div class="nav previous"><a href="%%PREV_LINK%%"><span class="arrow">&larr;</span>%%PREV_TITLE%%</a></div>
-        <div class="nav next"><a href="%%NEXT_LINK">%%NEXT_TITLE%%<span class="arrow">&rarr;</span></a></div>
+        <div class="nav previous"><!--PREV_LINK--></div>
+        <div class="nav next"><!--NEXT_LINK--></div>
       </div>
-      <div class="copyright">%%COPYRIGHT%%</div>
+      <div class="copyright"><!--COPYRIGHT--></div>
     </div>
     <script src="/static/script.js" type="text/javascript"></script>
   </body>
@@ -155,6 +156,66 @@ export type RenderOptions = {
     skipEval?: boolean
 };
 
+function renderSidebar(page: Page): string {
+    const output: Array<string> = [ ];
+
+    // Get the table of contents for the root page
+    const toc = page.document.toc.slice();
+
+    const pageCount = page.path.split("/").length;
+
+    output.push(`<div class="link title"><a href="/">${ toc.shift().title }</a></div>`)
+    toc.forEach((entry) => {
+        let entryCount = entry.path.split("/").length;
+        if (entry.path.indexOf("#") >= 0) { entryCount++; }
+
+        let classes: Array<string> = [ ];
+
+        // Base node; always added
+        if (entryCount === 3) { classes.push("base"); }
+
+        if (entry.path.substring(0, page.path.length) === page.path) {
+            if (entryCount === pageCount) {
+                // Myself
+                classes.push("myself");
+                classes.push("ancestor");
+            } else if (entryCount === pageCount + 1) {
+                // Direct child
+                classes.push("child");
+            }
+        }
+
+        // Ancestor
+        if (classes.indexOf("child") === -1) {
+            let basepath = entry.path.split("#")[0];
+            if (page.path.substring(0, basepath.length) === basepath) {
+                classes.push("ancestor");
+            }
+        }
+
+        // A sibling of an ancestor
+        if (entry.path.indexOf("#") === -1) {
+            const comps = entry.path.split("/");
+            comps.pop();
+            comps.pop();
+            comps.push("");
+
+            const path = comps.join("/");
+            if (page.path.substring(0, path.length) === path) {
+                classes.push("show");
+            }
+        }
+
+        if (classes.length === 0) { classes.push("hide"); }
+        classes.push("link");
+        classes.push("depth-" + entry.depth);
+
+        output.push(`<div class="${ classes.join(" ") }"><a href="${ entry.path }">${ entry.title }</a></div>`);
+    });
+
+    return output.join("");
+}
+
 function renderFragment(fragment: Fragment, renderOptions?: RenderOptions): string {
     const output = [ ];
 
@@ -176,6 +237,12 @@ function renderFragment(fragment: Fragment, renderOptions?: RenderOptions): stri
               if (extInherit) {
                 const inherit = fragment.page.document.parseMarkdown(extInherit.replace(/\s+/g, " ").trim(), [ MarkdownStyle.LINK ]);
                 output.push(`<span class="inherits"> inherits ${ renderHtml(inherit) }</span>`);
+              } else {
+                const extNote = fragment.getExtension("note");
+                if (extNote) {
+                  const note = fragment.page.document.parseMarkdown(extNote.replace(/\s+/g, " ").trim(), [ MarkdownStyle.LINK ]);
+                  output.push(`<span class="inherits">${ renderHtml(note) }</span>`);
+                }
               }
 
               output.push(`<div class="anchors">`);
@@ -269,8 +336,19 @@ function renderFragment(fragment: Fragment, renderOptions?: RenderOptions): stri
             break;
         }
 
-        //case FragmentType.TOC: {
-        //}
+        case FragmentType.TOC: {
+            if (!(fragment instanceof TocFragment)) {
+              throw new Error("invalid code fragment object");
+            }
+
+            output.push(`<div class="toc">`);
+            fragment.page.toc.slice(1).forEach((entry) => {
+              const offset = (entry.depth - 1) * 28;
+              output.push(`<div style="padding-left: ${ offset }px"><span class="bullet">&bull;</span><a href="${ entry.path }">${ entry.title }</a></div>`)
+            });
+            output.push(`</div>`);
+            break;
+        }
     }
 
     return output.join("");
@@ -278,10 +356,28 @@ function renderFragment(fragment: Fragment, renderOptions?: RenderOptions): stri
 
 export function renderPage(page: Page, renderOptions?: RenderOptions): string {
     const output = [ ];
+
+    const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
+    {
+        let path = page.path;
+        while (path !== "/") {
+            path = path.match(/(.*\/)([^/]+\/)/)[1];
+            const p = page.document.getPage(path);
+            const title = (p.sectionFragment.getExtension("nav") || p.title);
+            breadcrumbs.unshift(`<a href="${ p.path }">${ title }</a>`)
+        }
+    }
+
+    // Add the HTML header
     const header = PageHeader
-                   .replace("%%TITLE%%", (page.document.config.title || "TITLE"))
-                   .replace("%%SUBTITLE%%", (page.document.config.subtitle || "SUBTITLE"))
+                   .replace("<!--TITLE-->", (page.title || "Documentation"))
+                   .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
+                   .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
+                   .replace("<!--SIDEBAR-->", renderSidebar(page))
+                   .replace("<!--BREADCRUMBS-->", breadcrumbs.join("&nbsp;&nbsp;&raquo;&nbsp;&nbsp;"));
     output.push(header);
+
+    // Render all the Fragments
     for (let f = 0; f < page.fragments.length; f++) {
         try {
             output.push(renderFragment(page.fragments[f]));
@@ -289,7 +385,28 @@ export function renderPage(page: Page, renderOptions?: RenderOptions): string {
             throw new Error(`${ error.message } [${ page.filename }]`);
         }
     }
-    output.push(PageFooter.replace("%%COPYRIGHT%%", renderHtml(page.document.copyright)));
+
+    // Add the copyright to the footer
+    let footer = PageFooter.replace("<!--COPYRIGHT-->", renderHtml(page.document.copyright));
+
+    // Add the next and previous links to the footer
+    const navItems = page.document.toc;
+    navItems.forEach((entry, index) => {
+        if (entry.path === page.path) {
+            if (index > 0) {
+                const link = navItems[index - 1];
+                footer = footer.replace("<!--PREV_LINK-->", `<a href="${ link.path }"><span class="arrow">&larr;</span>${ link.title }</a>`);
+            }
+            if (index + 1 < navItems.length) {
+                const link = navItems[index + 1];
+                footer = footer.replace("<!--NEXT_LINK-->", `<a href="${ link.path }">${ link.title }<span class="arrow">&rarr;</span></a>`);
+            }
+        }
+    });
+
+    // Add the HTML footer
+    output.push(footer);
+
     return output.join("\n");
 }
 
