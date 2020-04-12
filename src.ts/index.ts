@@ -6,6 +6,15 @@ export {
     ListNode,
     PropertyNode,
 
+    ElementStyle,
+    MarkdownStyle,
+
+    escapeText,
+    parseBlock,
+    parseMarkdown
+} from "./markdown"
+
+export {
     Fragment,
     CodeFragment,
     TocFragment,
@@ -14,29 +23,13 @@ export {
 
     TocEntry,
 
-    ElementStyle,
-    FragmentType,
-
-    MarkdownStyle,
-
-    escapeText,
-    parseMarkdown
+    FragmentType
 } from "./document"
 
-export {
-    Config,
-    MarkdownConfig
-} from "./config"
+export { Config, MarkdownConfig } from "./config"
+export { Line, Script } from "./script"
 
-export {
-    Script,
-    Line
-} from "./scripts"
-
-export {
-    Renderer,
-    File
-} from "./renderer"
+export { File, Renderer } from "./renderer"
 
 export { HtmlRenderer } from "./renderer-html";
 export { MarkdownRenderer } from "./renderer-markdown";

@@ -3,7 +3,7 @@
 import { relative } from "path";
 
 import { CodeFragment, Fragment, FragmentType, Page, TocFragment } from "./document";
-import { ElementStyle, ElementNode, LinkNode, ListNode, Node } from "./document";
+import { ElementStyle, ElementNode, LinkNode, ListNode, Node } from "./markdown";
 import { Renderer } from "./renderer";
 
 

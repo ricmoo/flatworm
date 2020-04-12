@@ -3,9 +3,8 @@
 import fs from "fs";
 import { resolve } from "path";
 
-import { CodeFragment, Document, Fragment, Page, TocFragment } from "./document";
-import { ElementNode, LinkNode, ListNode, Node, PropertyNode, TextNode } from "./document";
-import { ElementStyle, FragmentType, MarkdownStyle } from "./document";
+import { CodeFragment, Document, Fragment, FragmentType, Page, TocFragment } from "./document";
+import { ElementNode, ElementStyle, LinkNode, ListNode, MarkdownStyle, Node, PropertyNode, TextNode } from "./markdown";
 
 import { File, Renderer } from "./renderer";
 

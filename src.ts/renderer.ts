@@ -1,6 +1,7 @@
 "use strict";
 
-import { Document, ElementNode, Fragment, Node, Page } from "./document";
+import { Document, Fragment, Page } from "./document";
+import { ElementNode, Node } from "./markdown";
 
 
 export type File = {

@@ -9,7 +9,7 @@ import { Config } from "./config";
 import { Document } from "./document";
 import { HtmlRenderer } from "./renderer-html";
 import { MarkdownRenderer } from "./renderer-markdown";
-import { Script } from "./scripts";
+import { Script } from "./script";
 
 const { version } = require("../package.json");
 
