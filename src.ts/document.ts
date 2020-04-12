@@ -4,7 +4,7 @@ import fs from "fs";
 import { basename, dirname, extname, resolve } from "path";
 
 import type { Config } from "./config";
-import type { Script } from "./scripts";
+import type { Line, Script } from "./scripts";
 
 // @TOOD: Move markdown related things into its own file.
 
@@ -320,11 +320,6 @@ export class Fragment {
         return new Fragment(tag, value, parseMarkdown(body));
     }
 }
-
-export type Line = {
-    classes: Array<string>,
-    content: string
-};
 
 export class CodeFragment extends Fragment {
     readonly _filename: string

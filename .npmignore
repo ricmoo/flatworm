@@ -1,0 +1,10 @@
+obsolete/
+src.ts/
+docs/
+docs.wrm/
+test-ethers/
+static/logo.ai
+/static/lato/unused/
+**~
+**/.DS_Store
+tsconfig.json
