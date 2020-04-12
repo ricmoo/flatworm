@@ -47,6 +47,14 @@ export class MarkdownRenderer extends Renderer {
                 case ElementStyle.ITALIC:
                 case ElementStyle.UNDERLINE:
                     return "*" + this.renderMarkdown(node.children) + "*";
+                case ElementStyle.SUPER: {
+                    let text = this.renderMarkdown(node.children);
+                    console.log(JSON.stringify(text));
+                    if (!text.match(/^[a-zA-Z0-9]+$/i)) { text = `(${ text })`; }
+                    return "^" + text;
+                }
+                case ElementStyle.STRIKE:
+                    return "~~" + this.renderMarkdown(node.children) + "~~";
                 case ElementStyle.CODE:
                     return "`" + this.renderMarkdown(node.children) + "`";
 

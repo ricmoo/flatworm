@@ -8,13 +8,11 @@ __underlined text__
 
 ^^superscript text^^
 
+~~striked text~~
+
 - This is a list
 - With bullet points
 - With a total of three items
-
-This is separated by -- an en-dash.
-
-This is separated by --- an em-dash.
 
 This is a [Link to Ethereum](https://ethereum.org) and this
 is an [Internal Link](some-link).

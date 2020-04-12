@@ -1,4 +1,4 @@
-_section: Flatworm Docs @<test1> @somethING<foo>
+_section: Flatworm Docs @<test1> @NAV<foo>
 
 The //Flatworm Docs// rendering script is designed to be **very**
 simple, but provide enough formatting necessary for documenting
@@ -76,7 +76,8 @@ _subsection: Markdown @<flatworm-markdown>
 
 The markdown is simple and does not have the flexibility of
 other dialects, but allows for **bold**, //italic//,
-__underlined__, ``monospaced``, ^^super-scripted^^ text,
-supporting [links](flatworm-markdown) and lists.
+__underlined__, ``monospaced``, super^^script^^ and
+~~striked~~ text, supporting [links](flatworm-markdown) and
+lists.
 
 _code: markdown.txt

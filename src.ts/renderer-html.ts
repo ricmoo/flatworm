@@ -44,6 +44,7 @@ Tags[ElementStyle.BOLD] = "b";
 Tags[ElementStyle.CODE] = "code";
 Tags[ElementStyle.ITALIC] = "i";
 Tags[ElementStyle.SUPER] = "sup";
+Tags[ElementStyle.STRIKE] = "strike";
 Tags[ElementStyle.UNDERLINE] = "u";
 
 const DOT = '<span class="symbol">.</span>'

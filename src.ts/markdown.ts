@@ -35,8 +35,9 @@ export enum ElementStyle {
     // Inline styles
     BOLD       = "bold",
     ITALIC     = "italic",
-    UNDERLINE  = "Underline",
+    UNDERLINE  = "underline",
     SUPER      = "super",
+    STRIKE     = "strike",
     CODE       = "code",
 
     // Link
@@ -175,6 +176,7 @@ export enum MarkdownStyle {
     UNDERLINE  = "underline",
     CODE       = "code",
     SUPER      = "super",
+    STRIKE     = "strike",
     LINK       = "link",
     LIST       = "list",
 };
@@ -185,6 +187,7 @@ export const StylesAll = Object.freeze([
     MarkdownStyle.UNDERLINE,
     MarkdownStyle.CODE,
     MarkdownStyle.SUPER,
+    MarkdownStyle.STRIKE,
     MarkdownStyle.LINK,
     MarkdownStyle.LIST,
 ]);
@@ -194,6 +197,7 @@ const WrapTypes: { [ sym: string ]: ElementStyle } = {
     "/\/":  ElementStyle.ITALIC,
     "__":   ElementStyle.UNDERLINE,
     "^^":   ElementStyle.SUPER,
+    "~~":   ElementStyle.STRIKE,
     "``":   ElementStyle.CODE,
 };
 
@@ -262,7 +266,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
     }
 
     // Check for bold, italic, underline, superscript, and inline code...
-    const matchStyle = markdown.match(/^((?:.|\n)*?)(\*\*|\/\/|__|\^\^|``)((?:.|\n)*)$/);
+    const matchStyle = markdown.match(/^((?:.|\n)*?)(\*\*|\/\/|__|\^\^|~~|``)((?:.|\n)*)$/);
     if (matchStyle && styles.indexOf(<any>WrapTypes[matchStyle[2]]) !== -1) {
         candidates.push({
             offset: matchStyle[1].length,
