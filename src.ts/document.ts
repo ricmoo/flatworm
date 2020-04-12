@@ -8,20 +8,24 @@ import type { Script } from "./scripts";
 
 // @TOOD: Move markdown related things into its own file.
 
-// Directive Attributes
-// - body:     true if a directive supports having a body
-// - title:    true is a directive supports markup in its value
-const Directives: Readonly<{ [ tag: string ]: { body: boolean, title: boolean } }> = Object.freeze({
-    section: { body: false, title: true, exts: [ "inherit", "src" ] },
-    subsection: { body: false, title: true, exts: [ "inherit", "src" ] },
-    heading: { body: false, title: true, exts: [ "inherit", "src" ] },
-    definition: { body: true, title: true, exts: [ ] },
-    property: { body: true, title: false, exts: [ "src" ] },
-    code: { body: false, title: true, exts: [ ] },
-    toc: { body: true, title: false, exts: [ ] },
-    "null": { body: true, title: false, exts: [ ] },
-    note: { body: true, title: false, exts: [ ] },
-    warning: { body: true, title: false, exts: [ ] }
+type DirectiveInfo = {
+    body?: boolean       // Supports a body
+    title?: boolean,     // Supports markdown title
+    heading?: boolean,   // Supports plain text title
+    exts: Array<string>, // Supported extension
+};
+
+const Directives: Readonly<{ [ tag: string ]: DirectiveInfo }> = Object.freeze({
+    section:     { title: true,               exts: [ "inherit", "src" ] },
+    subsection:  { title: true,               exts: [ "inherit", "src" ] },
+    heading:     { title: true,               exts: [ "inherit", "src" ] },
+    definition:  { body: true, title: true,   exts: [ ] },
+    property:    { body: true,                exts: [ "src" ] },
+    code:        { title: true,               exts: [ ] },
+    toc:         { body: true,                exts: [ ] },
+    "null":      { body: true,                exts: [ ] },
+    note:        { body: true, heading: true, exts: [ ] },
+    warning:     { body: true, heading: true, exts: [ ] }
 });
 
 
@@ -117,7 +121,6 @@ export class LinkNode extends ElementNode {
 
     get textContent(): string {
         if (this.children.length === 0) {
-            console.log(this.link);
             return this.document.getLinkName(this.link);
         }
         return super.textContent;
@@ -226,14 +229,33 @@ export class Fragment {
             const match = comps[0].match(/^([^\x5d(]+)(\([^)]*\))?\s*$/);
             if (!match) { throw new Error(`invalid function definition: ${ JSON.stringify(sig) }`); }
 
-            let returns = (comps[1] ? parseBlock(comps[1], [ MarkdownStyle.LINK ]): null);
+            const name = match[1].replace(/\s*/g, "");
 
-            this.title = new PropertyNode(isConstructor, match[1], match[2] || null, returns);
+            let params = match[2] || null;
+            if (params) {
+                params = params.replace(/([,=\x5b\x5d()])/g, (all, symbol) => {
+                    return " " + symbol + " ";
+                }).replace(/\s+/g, " ").trim();
+            }
+
+            let ret = comps[1]
+            if (ret) {
+                ret = ret.replace(/>\s*/g, " >").replace(/<\s*/g, "< ").replace(/\|/g, " | ").replace(/\s+/g, " ").trim();
+            }
+            const returns = (ret ? parseBlock(ret, [ MarkdownStyle.LINK ]): null);
+
+            this.title = new PropertyNode(isConstructor, name, params, returns);
 
         } else if (Directives[tag].title) {
             this.title = parseBlock(this.value, StylesAll);
 
+        } else if (Directives[tag].heading) {
+            this.title = new TextNode(this.value);
+
         } else {
+            if (this.value.trim() !== "") {
+                throw new Error(`unsupported value in ${ this.tag }`);
+            }
             this.title = null;
         }
 
@@ -693,7 +715,6 @@ export class Document {
                     try {
                         return [ Page.fromFile(childpath) ];
                     } catch (error) {
-                        console.log(error.stack);
                         throw new Error(`${ error.message } [${ childpath }]`);
                     }
                 }

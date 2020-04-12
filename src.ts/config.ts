@@ -7,6 +7,10 @@ const vm = require("vm");
 
 export type ConfigLink = Readonly<{ name: string, url: string }>;
 
+export type MarkdownConfig = {
+    banner?: string
+};
+
 export class Config {
     // Documentation Header
     readonly title: string;
@@ -24,6 +28,8 @@ export class Config {
 
     // The external links provided in the config
     readonly externalLinks: Readonly<{ [ name: string ]: ConfigLink }>;
+
+    readonly markdown: Readonly<MarkdownConfig>;
 
     readonly _getSourceUrl: (key: string) => string;
 
@@ -52,6 +58,12 @@ export class Config {
         this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
 
         this.codeRoot = config.codeRoot || null;
+
+        const markdown: MarkdownConfig = { };
+        if (config.markdown) {
+            markdown.banner = (config.markdown.banner || null);
+        }
+        this.markdown = markdown;
     }
 
     getSourceUrl(key: string, value: string): string {

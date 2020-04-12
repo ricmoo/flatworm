@@ -7,7 +7,8 @@ import { dirname, resolve } from "path";
 
 import { Config } from "./config";
 import { Document } from "./document";
-import { renderDocument as renderHtml } from "./renderer-html";
+import { HtmlRenderer } from "./renderer-html";
+import { MarkdownRenderer } from "./renderer-markdown";
 import { Script } from "./scripts";
 
 const { version } = require("../package.json");
@@ -90,10 +91,6 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
             const src = opts.args[0];
             const dst = opts.args[1];
 
-            const options = {
-                skipEval: !!opts.flags.skipeval
-            };
-
             const config = Config.fromRoot(src);
             const document = Document.fromFolder(src, config);
             //console.log(document);
@@ -103,12 +100,18 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
                 await document.evaluate(script);
             }
 
-            const files = renderHtml(document, options);
-            files.forEach((file) => {
-                const filename = resolve(dst, file.filename);
-                fs.mkdirSync(dirname(filename), { recursive: true });
-                fs.writeFileSync(filename, file.content);
-                console.log(filename);
+            const renderers = [
+                new HtmlRenderer(),
+                new MarkdownRenderer()
+            ];
+            renderers.forEach((renderer) => {
+                const files = renderer.renderDocument(document);
+                files.forEach((file) => {
+                    const filename = resolve(dst, file.filename);
+                    fs.mkdirSync(dirname(filename), { recursive: true });
+                    fs.writeFileSync(filename, file.content);
+                    console.log(filename);
+                });
             });
         }
     } catch (error) {
