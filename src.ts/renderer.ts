@@ -1,7 +1,7 @@
 "use strict";
 
 import type { Document, Fragment, Page } from "./document";
-import { ElementNode, Node } from "./markdown";
+import { ElementNode, Node, SymbolNode } from "./markdown";
 
 
 export type File = {
@@ -17,7 +17,10 @@ export class Renderer {
     }
 
     renderNode(node: Node): string {
-        if (node instanceof ElementNode) {
+        if (node instanceof SymbolNode) {
+            return this.getSymbol(node.name);
+
+        } else if (node instanceof ElementNode) {
             return this.renderMarkdown(node.children);
         }
         return node.textContent;
@@ -33,20 +36,23 @@ export class Renderer {
         }).join("");
     }
 
+    renderBlock(node: Node): string {
+        return this.renderMarkdown(node) + "\n";
+    }
+
+    renderBody(fragment: Fragment): string {
+        return fragment.body.map((block) => (this.renderBlock(block))).join("\n") + "\n";
+    }
+
+    renderTitle(fragment: Fragment): string {
+        return this.renderMarkdown(fragment.title) + "\n";
+    }
+
     renderFragment(fragment: Fragment): string {
-        let output = [ ];
-
-        if (fragment.title) {
-            output.push(this.renderMarkdown(fragment.title) + "\n");
-        }
-
-        if (fragment.body) {
-            fragment.body.forEach((block) => {
-                output.push(this.renderMarkdown(block) + "\n\n");
-            });
-        }
-
-        return output.join("") + "\n";
+        return [
+            (fragment.title ? this.renderTitle(fragment): ""),
+            this.renderBody(fragment)
+        ].join("\n") + "\n";
     }
 
     pageFilename(page: Page): string {
@@ -58,6 +64,7 @@ export class Renderer {
             try {
                 return this.renderFragment(fragment);
             } catch (error) {
+        console.log(fragment, error);
                 throw new Error(`${ error.message } [${ page.filename }]`);
             }
         }).join("");
@@ -70,5 +77,9 @@ export class Renderer {
                 content: this.renderPage(page)
             };
         });
+    }
+
+    getSymbol(name: string): string {
+        return name;
     }
 }

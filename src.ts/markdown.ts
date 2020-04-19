@@ -2,7 +2,15 @@
 
 import type { Document } from "./document";
 
+let NextId = 1;
+
 export abstract class Node {
+    readonly id: number;
+
+    constructor() {
+        this.id = NextId++;
+    }
+
     #document: Document;
     _setDocument(document: Document): void {
         if (this.#document) { throw new Error("already has a document"); }
@@ -26,6 +34,27 @@ export class TextNode extends Node {
 
     get textContent(): string {
         return this.content;
+    }
+}
+
+// This list needs to be much more comprehensive; this is just the beginning
+export const SymbolNames: Array<string> = [
+    "copy",
+    "mdash", "ndash",
+    "div", "times", "le", "lt", "ge", "gt",
+    "eacute", "ouml",
+    "Xi",
+];
+
+export class SymbolNode extends TextNode {
+    readonly name: string;
+
+    constructor(name: string) {
+        if (SymbolNames.indexOf(name) === -1) {
+            throw new Error(`unknown symbol ${ JSON.stringify(name) }`);
+        }
+        super(`&${ name };`);
+        this.name = name;
     }
 }
 
@@ -53,6 +82,9 @@ export enum ElementStyle {
     PARAMETERS = "parameters",
     ARROW      = "arrow",
     RETURNS    = "returns",
+
+    // Table Cell
+    CELL       = "cell",
 };
 
 export class ElementNode extends Node {
@@ -137,6 +169,31 @@ export class PropertyNode extends ElementNode {
     }
 }
 
+export enum CellAlign {
+    LEFT = "left",
+    CENTER = "center",
+    RIGHT = "right"
+};
+
+export class CellNode extends ElementNode {
+    readonly row: number;
+    readonly col: number;
+
+    readonly align: CellAlign;
+
+    readonly rowspan: number;
+    readonly colspan: number;
+
+    constructor(row: number, col: number, align: CellAlign, rowspan: number, colspan: number, children: Array<Node>) {
+        super(ElementStyle.CELL, children);
+        this.row = row;
+        this.col = col;
+        this.align = align;
+        this.rowspan = rowspan;
+        this.colspan = colspan;
+    }
+}
+
 // Breaks markdown into blocks. Blocks are separated by an empty line
 // and lists are implicitly in their own block.
 function splitBlocks(markdown: string): Array<string> {
@@ -192,6 +249,16 @@ export const StylesAll = Object.freeze([
     MarkdownStyle.LIST,
 ]);
 
+export const StylesInline = Object.freeze([
+    MarkdownStyle.BOLD,
+    MarkdownStyle.ITALIC,
+    MarkdownStyle.UNDERLINE,
+    MarkdownStyle.CODE,
+    MarkdownStyle.SUPER,
+    MarkdownStyle.STRIKE,
+    MarkdownStyle.LINK,
+]);
+
 const WrapTypes: { [ sym: string ]: ElementStyle } = {
     "**":   ElementStyle.BOLD,
     "/\/":  ElementStyle.ITALIC,
@@ -216,8 +283,10 @@ function simplify(result: Array<Node>, markdown: string, styles: ReadonlyArray<M
 export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle>): Node {
     if (markdown === "") { return new TextNode(""); } // @TODO: something better? Filter...
 
+    const childStyles = styles.filter((s) => (s !== MarkdownStyle.LIST));
+
     // Check for lists...
-    if (markdown.trim()[0] === "-" && styles.indexOf(MarkdownStyle.LIST)) {
+    if (markdown.trim()[0] === "-" && styles.indexOf(MarkdownStyle.LIST) !== -1) {
 
         const points: Array<string> = [ ];
         markdown.split("\n").forEach((line) => {
@@ -229,7 +298,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
             }
         });
 
-        return new ListNode(points.map((point) => parseBlock(point, styles)));
+        return new ListNode(points.map((point) => parseBlock(point, childStyles)));
     }
 
     // No list, so remove newlines and unnecessary spaces (do not trim)
@@ -247,7 +316,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
             offset: matchLink[1].length,
             callback: () => {
                 const result: Array<Node> = [ ];
-                simplify(result, matchLink[1], styles);
+                simplify(result, matchLink[1], childStyles);
                 if (matchLink[3]) {
                     result.push(new LinkNode(matchLink[3], [ ]));
                 } else {
@@ -257,7 +326,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
                     //result.push(new LinkNode(matchLink[5], parseBlock(matchLink[4])));
                     result.push(new LinkNode(matchLink[5], [ escapeText(matchLink[4]) ]));
                 }
-                simplify(result, matchLink[6], styles);
+                simplify(result, matchLink[6], childStyles);
 
                 if (result.length === 1) { return result[0]; }
                 return new ElementNode(ElementStyle.NORMAL, result);
@@ -281,12 +350,33 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
 
                 const result: Array<Node> = [ ];
                 if (matchStyle[1]) {
-                    simplify(result, matchStyle[1], styles);
+                    simplify(result, matchStyle[1], childStyles);
                 }
                 //result.push(new ElementNode(type, simplify(parseBlock(markdown.substring(open + 2, close)))));
-                result.push(new ElementNode(type, simplify([ ], markdown.substring(open + 2, close), styles)));
+                result.push(new ElementNode(type, simplify([ ], markdown.substring(open + 2, close), childStyles)));
                 if (close + 2 < markdown.length) {
-                    simplify(result, markdown.substring(close + 2), styles);
+                    simplify(result, markdown.substring(close + 2), childStyles);
+                }
+
+                if (result.length === 1) { return result[0]; }
+                return new ElementNode(ElementStyle.NORMAL, result);
+            }
+        });
+    }
+
+    // Check for symbol names (i.e. &NAME;)
+    const matchSymbol = markdown.match(/^((?:.|\n)*?)&([a-z0-9]+);((?:.|\n)*)$/i);
+    if (matchSymbol) {
+        candidates.push({
+            offset: matchSymbol[1].length,
+            callback: () => {
+                const result: Array<Node> = [ ];
+                if (matchSymbol[1]) {
+                    simplify(result, matchSymbol[1], childStyles);
+                }
+                result.push(new SymbolNode(matchSymbol[2]));
+                if (matchSymbol[3]) {
+                    simplify(result, matchSymbol[3], childStyles);
                 }
 
                 if (result.length === 1) { return result[0]; }

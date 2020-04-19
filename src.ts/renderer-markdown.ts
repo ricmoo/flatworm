@@ -15,6 +15,11 @@ function repeat(c: string, length: number): string {
     return c.substring(0, length);
 }
 
+// Maps languages into their markdown code specifier
+const SupportedLanguages: { [ lang: string ]: string } = {
+    javascript: "javascript",
+};
+
 export class MarkdownRenderer extends Renderer {
     constructor(filename?: string) {
         super(filename || "README.md");
@@ -81,11 +86,19 @@ export class MarkdownRenderer extends Renderer {
 
     renderFragment(fragment: Fragment): string {
         if (fragment instanceof CodeFragment) {
+            const result: Array<string> = [
+                "```", (SupportedLanguages[fragment.language] || ""), "\n",
+            ];
+
             if (fragment.evaluated) {
-                return ("```\n" + fragment.code.map((l) => l.content).join("\n") + "```\n\n");
+                result.push(fragment.code.map((l) => l.content).join("\n").trim() + "\n");
+            } else {
+                result.push(fragment.source + "\n");
             }
 
-            return ("```\n" + fragment.source + "```\n\n");
+            result.push("```\n\n");
+
+            return result.join("");
 
         } else if (fragment instanceof TocFragment) {
             const page = fragment.page;
@@ -121,6 +134,29 @@ export class MarkdownRenderer extends Renderer {
     renderPage(page: Page): string {
         const banner = page.document.config.markdown.banner || "";
         return banner + super.renderPage(page);
+    }
+
+    getSymbol(name: string): string {
+        switch (name) {
+            case "copy":  return "(c)";
+
+            case "ndash": return "--";
+            case "mdash": return "---";
+
+            case "div": return "/";
+            case "times": return "\\*";
+            case "le": return "<=";
+            case "lt": return "<";
+            case "ge": return ">=";
+            case "gt": return ">";
+
+            case "eacute": return "e";
+            case "ouml": return "o";
+
+            case "Xi": return "Xi";
+        }
+
+        return `((${ name }))`;
     }
 }
 

@@ -3,8 +3,10 @@
 import fs from "fs";
 import { resolve } from "path";
 
-import { CodeFragment, Document, Fragment, FragmentType, Page, TocFragment } from "./document";
-import { ElementNode, ElementStyle, LinkNode, ListNode, MarkdownStyle, Node, PropertyNode, TextNode } from "./markdown";
+import { CodeFragment, Document, Fragment, FragmentType, Page, TableFragment, TocFragment } from "./document";
+
+import { ElementNode, LinkNode, ListNode, Node, PropertyNode, SymbolNode, TextNode } from "./markdown";
+import { ElementStyle, MarkdownStyle } from "./markdown";
 
 import { File, Renderer } from "./renderer";
 
@@ -49,11 +51,20 @@ Tags[ElementStyle.UNDERLINE] = "u";
 
 const DOT = '<span class="symbol">.</span>'
 
+/*
+// Maybe use this for code, so it can include entities?
 function escapeHtml(html: string): string {
     return html.replace(/(&([a-zA-Z0-9]+;)|<|>)/g, (all, token, entity) => {
         if (entity) {
             return token;
         }
+        return (<any>{ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[token];
+    });
+}
+*/
+
+function escape(html: string): string {
+    return html.replace(/(&|<|>)/g, (all, token) => {
         return (<any>{ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[token];
     });
 }
@@ -76,8 +87,11 @@ export class HtmlRenderer extends Renderer {
     }
 
     renderNode(node: Node): string {
-        if (node instanceof TextNode) {
-            return escapeHtml(node.content);
+        if (node instanceof SymbolNode) {
+            return `&${ node.name };`;
+
+        } else if (node instanceof TextNode) {
+            return escape(node.content);
 
         } else if (node instanceof LinkNode) {
             let url = node.link;
@@ -223,6 +237,10 @@ export class HtmlRenderer extends Renderer {
         return output.join("");
     }
 
+    renderBlock(node: Node): string {
+        return `<p>${ this.renderMarkdown(node) }</p>\n`;
+    }
+
     renderFragment(fragment: Fragment): string {
         const output = [ ];
 
@@ -234,7 +252,7 @@ export class HtmlRenderer extends Renderer {
             if (fragment.evaluated) {
               output.push(`<div class="code">`);
                 fragment.code.forEach((line) => {
-                  let content = escapeHtml(line.content) + "\n";
+                  let content = escape(line.content) + "\n";
                   if (line.classes.length) {
                     content = `<span class="${ line.classes.join(" ") }">${ content }</span>`;
                   }
@@ -242,8 +260,30 @@ export class HtmlRenderer extends Renderer {
                 });
               output.push(`</div>`);
             } else {
-              output.push(`<div class="code">${ escapeHtml(fragment.source) }</div>`)
+              output.push(`<div class="code">${ escape(fragment.source) }</div>`)
             }
+            return output.join("");
+
+        } else if (fragment instanceof TableFragment) {
+            output.push(`<table class="table ${ fragment.style }">`)
+              for (let r = 0; r < fragment.rows; r++) {
+                output.push(`<tr>`);
+                  for (let c = 0; c < fragment.cols; c++) {
+                    const cell = fragment.getCell(r, c);
+                    if (!cell) { continue; }
+                    output.push(`<td align="${ cell.align }" colspan="${ cell.colspan } rowspan=${ cell.rowspan }">`)
+                      output.push(this.renderMarkdown(cell.children));
+                    output.push(`</td>`);
+                  }
+                output.push(`<tr>`);
+              }
+            output.push(`</table>`);
+            /*
+            const title = fragment.title.textContent.trim();
+            if (title !== "") {
+                output.push(`<div class="table compact footer">${ title }</div>`);
+            }
+            */
             return output.join("");
 
         } else if (fragment instanceof TocFragment) {
@@ -290,6 +330,7 @@ export class HtmlRenderer extends Renderer {
                     }
                   output.push(`</div>`)
                 output.push(`</div></${ tag }>`);
+                output.push(this.renderBody(fragment));
                 break;
             }
 
@@ -309,9 +350,7 @@ export class HtmlRenderer extends Renderer {
                     }
                   output.push(`</div>`)
                   output.push(`<div class="body">`)
-                  fragment.body.forEach((block) => {
-                    output.push(`<p>${ this.renderMarkdown(block) }</p>`)
-                  });
+                    output.push(this.renderBody(fragment));
                   output.push(`</div>`)
                 output.push(`</div>`)
                 break;
@@ -333,18 +372,14 @@ export class HtmlRenderer extends Renderer {
                   output.push(`</div>`)
                 output.push(`</div>`)
                 output.push(`<div class="body">`)
-                  fragment.body.forEach((block) => {
-                    output.push(`<p>${ this.renderMarkdown(block) }</p>`)
-                  });
+                  output.push(this.renderBody(fragment));
                 output.push(`</div>`)
               output.push(`</div>`)
               break;
             }
 
             case FragmentType.NULL: {
-              fragment.body.forEach((block) => {
-                output.push(`<p>${ this.renderMarkdown(block) }</p>`)
-              });
+              output.push(this.renderBody(fragment));
               break;
             }
 
@@ -458,5 +493,9 @@ export class HtmlRenderer extends Renderer {
         });
 
         return files;
+    }
+
+    getSymbol(name: string): string {
+        return `&${ name };`;
     }
 }

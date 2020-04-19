@@ -5,26 +5,35 @@ import { basename, dirname, extname, resolve } from "path";
 
 import type { Config } from "./config";
 import type { Line, Script } from "./script";
-import { MarkdownStyle, Node, parseBlock, parseMarkdown, PropertyNode, StylesAll, TextNode } from "./markdown";
+import { CellAlign, CellNode, MarkdownStyle, Node, parseBlock, parseMarkdown, PropertyNode, StylesAll, StylesInline, TextNode } from "./markdown";
 
 type DirectiveInfo = {
-    body?: boolean       // Supports a body
     title?: boolean,     // Supports markdown title
     heading?: boolean,   // Supports plain text title
     exts: Array<string>, // Supported extension
 };
 
+/*
+Maybe?
+enum TitleType {
+    NONE = null,
+    MARKDOWN = "markdown",
+    TEXT = "text",
+};
+*/
+
 const Directives: Readonly<{ [ tag: string ]: DirectiveInfo }> = Object.freeze({
-    section:     { title: true,               exts: [ "inherit", "note", "nav", "src" ] },
-    subsection:  { title: true,               exts: [ "inherit", "note", "src" ] },
-    heading:     { title: true,               exts: [ "inherit", "note", "src" ] },
-    definition:  { body: true, title: true,   exts: [ ] },
-    property:    { body: true,                exts: [ "src" ] },
-    code:        { title: true,               exts: [ ] },
-    toc:         { body: true,                exts: [ ] },
-    "null":      { body: true,                exts: [ ] },
-    note:        { body: true, heading: true, exts: [ ] },
-    warning:     { body: true, heading: true, exts: [ ] }
+    section:     { title: true,   exts: [ "inherit", "note", "nav", "src" ] },
+    subsection:  { title: true,   exts: [ "inherit", "note", "src" ] },
+    heading:     { title: true,   exts: [ "inherit", "note", "src" ] },
+    definition:  { title: true,   exts: [ ] },
+    property:    {                exts: [ "src" ] },
+    code:        { heading: true, exts: [ "lang" ] },  // body is specially handled
+    toc:         {                exts: [ ] },
+    "null":      {                exts: [ ] },
+    note:        { heading: true, exts: [ ] },
+    warning:     { heading: true, exts: [ ] },
+    table:       { heading: true, exts: [ "style" ] }, // body is specially handled
 });
 
 
@@ -48,7 +57,9 @@ export enum FragmentType {
     CODE         = "code",
     NULL         = "null",
 
-    TOC          = "toc"
+    TOC          = "toc",
+
+    TABLE        = "table"
 };
 
 function getFragmentType(name: string): FragmentType {
@@ -192,7 +203,9 @@ export class Fragment {
         // Some special cases
         switch (tag) {
             case FragmentType.CODE:
-                return new CodeFragment(value);
+                return new CodeFragment(value, body);
+            case FragmentType.TABLE:
+                return new TableFragment(value, body);
             case FragmentType.TOC:
                 return new TocFragment(body);
         }
@@ -201,13 +214,24 @@ export class Fragment {
 }
 
 export class CodeFragment extends Fragment {
-    readonly _filename: string
+    readonly heading: string;
+    readonly source: string;
 
-    constructor(filename: string) {
-        super(FragmentType.CODE, filename, [ ]);
-        this._filename = filename;
+    constructor(heading: string, source: string) {
+        super(FragmentType.CODE, heading, [ new TextNode(source) ]);
+        this.heading = heading;
+
+        const lines = source.split("\n");
+        while (lines.length && lines[0].trim() === "") { lines.shift(); }
+        while (lines.length && lines[lines.length - 1].trim() === "") { lines.pop(); }
+        this.source = lines.join("\n");
     }
 
+    get language(): string {
+        return this.getExtension("lang");
+    }
+
+    /*
     get filename(): string {
         return resolve(dirname(this.page.filename), this._filename);
     }
@@ -228,6 +252,7 @@ export class CodeFragment extends Fragment {
         }
         return "unknown";
     }
+    */
 
     #code: ReadonlyArray<Line>;
     get code(): ReadonlyArray<Line> {
@@ -243,7 +268,7 @@ export class CodeFragment extends Fragment {
         }
 
         if (this.language === "javascript") {
-           this.#code = Object.freeze(await script.run(this.filename, this.source));
+           this.#code = Object.freeze(await script.run("script.js", this.source));
         }
     }
 
@@ -261,6 +286,211 @@ export class TocFragment extends Fragment {
         this.items = Object.freeze(body.split("\n").map((l) => l.trim()).filter((l) => l.length));
     }
 }
+
+type CellInfo = {
+    col: number;
+    cols: number;
+    row: number;
+    rows: number;
+    align?: CellAlign;
+    content?: string;
+};
+
+function getCellName(row: number, col: number): string {
+    return `${ row }x${ col }`;
+}
+
+export enum TableStyle {
+    MINIMAL  = "minimal",
+    COMPACT  = "compact",
+    WIDE     = "wide",
+    FULL     = "full"
+};
+
+const TableStyles: { [ name: string ]: boolean } = {
+    minimal: true,
+    compact: true,
+    wide: true,
+    full: true
+};
+
+export class TableFragment extends Fragment {
+    readonly rows: number;
+    readonly cols: number;
+
+    #cells: { [ name: string ]: CellNode };
+
+    constructor(value: string, body: string) {
+        super(FragmentType.TABLE, value, [ ]);
+        this.#cells = { };
+
+        const style = this.getExtension("style");
+        if (style && !TableStyles[style]) {
+            throw new Error(`unknown table style ${ JSON.stringify(style) }`);
+        }
+
+        const vars: { [ name: string ]: string } = { };
+
+        const table: Array<Array<CellInfo>> = [ ];
+        {
+            let currentVar: string = null;
+            body.split("\n").forEach((line) => {
+                line = line.trim();
+                if (line === "") { return; }
+
+                // Decalre a new variable
+                const matchVar = line.match(/^(\$[a-z][a-z0-9]*):(.*)$/i);
+                if (matchVar) {
+                    currentVar = matchVar[1];
+                    if (vars[currentVar] != null) { throw new Error(`duplicate variable "${ currentVar }"`); }
+                    vars[currentVar] = matchVar[2];
+
+                // Continue the table...
+                } else if (line[0] === "|") {
+                    if (line[line.length - 1] !== "|") {
+                        throw new Error(`table row missing close`);
+                    }
+
+                    // No longer processing a variable
+                    currentVar = null;
+
+                    let ci = 0, ri = table.length;
+
+                    // Determine each cells rowspan, colspan and alignment
+                    table.push(line.substring(1, line.length - 1).split("|").map((cell, index) => {
+
+                        // Only a row extending cell (e.g. <<<^)
+                        const matchCheckRow = cell.replace(/\s/g, "").match(/^([<]*)\^$/);
+                        if (matchCheckRow) {
+                            if (ri === 0) { throw new Error("cannot row extend top cells"); }
+
+                            const cols = matchCheckRow[1].length + 1;
+
+                            const baseCol = table[ri - 1].filter((c) => (c.col === ci))[0];
+                            if (baseCol == null) { throw new Error(`row extended cell column mismatch`); }
+
+                            if (baseCol.cols !== cols) {
+                                //console.log(table, lastCol, cols, ci);
+                                throw new Error("row extended cell column width mismatch");
+                            }
+
+                            baseCol.rows++;
+
+                            ci += cols;
+
+                            return baseCol;
+                        }
+
+                        let cols = 1;
+
+                        // Column extending
+                        const matchCheckCol = cell.trim().match(/(?:^|\s)(<+)$/);
+                        if (matchCheckCol) {
+                            cell = cell.substring(0, cell.length - matchCheckCol[1].length);
+                            cols += matchCheckCol[1].length;
+                        }
+
+                        // Alignment
+                        let align = CellAlign.CENTER;
+                        if (cell.trim() !== "") {
+                            if (cell.match(/^(\s*)/)[1].length <= 1) {
+                                align = CellAlign.LEFT;
+                            } else if (cell.match(/(\s*)$/)[1].length <= 1) {
+                                align = CellAlign.CENTER;
+                            }
+                        }
+
+                        const result = {
+                            align: align,
+                            col: ci,
+                            cols: cols,
+                            content: cell.trim(),
+                            row: ri,
+                            rows: 1
+                        }
+
+                        ci += cols;
+
+                        return result;
+                    }));
+
+                // Continue a variable's content
+                } else {
+                    if (currentVar == null) { throw new Error(`invalid table row ${ JSON.stringify(line) }`); }
+                    vars[currentVar] += " " + line
+                }
+            });
+        }
+        // Simplify all the varaibles by trimming unnecessary whitespace
+        for (const key in vars) { vars[key] = vars[key].replace(/\s+/g, " ").trim(); }
+
+        // Substitute variables and ensure the columns counts are consistent
+        const cols = table.reduce((accum, row, ri) => {
+            let ci = 0;
+            const cols = row.reduce((accum, col) => {
+
+                // Substitute variables
+                const value = vars[col.content];
+                if (value != null) { col.content = value; }
+
+                // Either create a new cell or reference the old one
+                let cell = null;
+                if (col.rows === -1) {
+                    cell = this.#cells[getCellName(ri - 1, ci)];
+                } else {
+                    cell = new CellNode(ri, ci, col.align, col.rows, col.cols, [ parseBlock(col.content, StylesInline) ]);
+                }
+
+                // Fill the cell across its columns
+                for (let i = 0; i < col.cols; i++) {
+                    this.#cells[getCellName(ri, ci)] = cell;
+                    ci++;
+                }
+
+                // Count the total number of columns
+                return accum + col.cols;
+            }, 0);
+
+            // Check the number of columns is consistent
+            if (accum != null && accum !== cols) {
+                throw new Error(`bad table column count (row[${ ri }] = ${ accum }, row[${ ri + 1}] = ${ cols })`);
+            }
+
+            return cols;
+        }, <number>null);
+
+        this.cols = cols;
+        this.rows = table.length;
+    }
+
+    get style(): TableStyle {
+        return (<TableStyle>(this.getExtension("style"))) || TableStyle.MINIMAL;
+    }
+
+    getCell(row: number, col: number): CellNode {
+        const cell = this.getParentCell(row, col);
+        if (cell.row !== row || cell.col !== col) {
+            return null;
+        }
+        return cell;
+    }
+
+    getParentCell(row: number, col: number) {
+        return this.#cells[getCellName(row, col)];
+    }
+}
+
+/*
+console.log(new TableFragment("foo", `
+$G: Tra lala
+foobar...
+$H: Another things...
+| **A**  |  **B**  |  **C**  |
+| Hello World     <| FOO     |
+|                <^|  BAR    |
+| $G     |    $H            <|
+`));
+*/
 
 export class Page {
     readonly fragments: ReadonlyArray<Fragment>;
@@ -406,6 +636,8 @@ export class Page {
         let value: string = null;
         let body: Array<string> = [ ];
 
+        let inCode = false;
+
         // Parse out all the fragments
         const lines = fs.readFileSync(filename).toString().split("\n");
         lines.forEach((line) => {
@@ -423,26 +655,15 @@ export class Page {
                 tag = getFragmentType(match[1].trim());
                 value = match[2].trim();
                 body = [ ];
+                inCode = (tag === FragmentType.CODE);
+
+            } else if (inCode) {
+                // The only escape in code blocks is a \_
+                if (line.substring(0, 2) === "\\_") { line = line.substring(1); }
+                body.push(line);
 
             } else {
-                line = line.trim();
-
-                // Continuing a fragment that doesn't support body...
-                if (!Directives[tag].body) {
-
-                    // ...commit any started fragment
-                    if (tag) {
-                        fragments.push(Fragment.from(tag, value, body.join("\n").trim()));
-                    }
-
-                    // ...start a new fragment
-                    tag = FragmentType.NULL;
-                    value = "";
-                    body = [ ];
-                }
-
-                // Continue the fragment (might be new)
-                body.push(line);
+                body.push(line.trim());
             }
         });
 
@@ -559,7 +780,11 @@ export class Document {
             for (let f = 0; f < page.fragments.length; f++) {
                 const fragment = page.fragments[f];
                 if (fragment instanceof CodeFragment) {
-                    await fragment.evaluate(script);
+                    try {
+                        await fragment.evaluate(script);
+                    } catch (error) {
+                        throw new Error(`${ error.message } [${ page.filename }]`)
+                    }
                 }
             }
         }

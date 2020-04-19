@@ -439,7 +439,7 @@ div.breadcrumbs span.current {
 
 
 code.inline {
-    background: #eef;
+    ddd-background: #eef;
     padding-left: 5px;
     padding-right: 5px;
 }
@@ -492,6 +492,31 @@ code.inline {
     color: #888;
     font-style: italic;
 }
+
+.content table.table {
+    border-collapse: collapse;
+    margin-left: 50px;
+}
+
+.content table.table.compact {
+    width: 300px;
+}
+
+.content table.table.wide {
+    width: 500px;
+}
+
+.content table.table.full {
+    width: 700px;
+}
+
+.content table.table td {
+    border: 2px solid #88a;
+    color: #444;
+    padding: 5px 20px;
+}
+
+
 
 .content .toc {
    margin: 20px 0 0 0px;
