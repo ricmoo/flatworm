@@ -28,10 +28,13 @@ export type Line = {
 
 export class Script {
     readonly codeRoot: string;
+    readonly contextify: (context: any) => void;
+
     readonly _require: (name: string) => any;
 
-    constructor(codeRoot: string) {
+    constructor(codeRoot: string, contextify?: (context: any) => void) {
         this.codeRoot = codeRoot;
+        this.contextify = contextify;
         this._require = _module.createRequireFromPath(resolve(codeRoot, "demo.js"))
     }
 
@@ -45,7 +48,9 @@ export class Script {
             console: console,
             require: this._require
         };
+
         const context = vm.createContext(contextObject);
+        if (this.contextify) { this.contextify(contextObject); }
 
         const output: Array<Line> = [ ];
         let script: Array<string> = [ ];

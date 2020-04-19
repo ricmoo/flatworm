@@ -26,6 +26,9 @@ export class Config {
     // The root that require will operate against when evaluating _code:
     readonly codeRoot: string;
 
+    // A function that will be called when preparing a context for evaluation
+    readonly codeContextify: (context: any) => void;
+
     // The external links provided in the config
     readonly externalLinks: Readonly<{ [ name: string ]: ConfigLink }>;
 
@@ -58,6 +61,7 @@ export class Config {
         this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
 
         this.codeRoot = config.codeRoot || null;
+        this.codeContextify = config.codeContextify || (() => { });
 
         const markdown: MarkdownConfig = { };
         if (config.markdown) {

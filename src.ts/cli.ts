@@ -93,10 +93,9 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
 
             const config = Config.fromRoot(src);
             const document = Document.fromFolder(src, config);
-            //console.log(document);
 
             if (!opts.flags.skipeval) {
-                const script = new Script(config.codeRoot ? resolve(src, config.codeRoot): src);
+                const script = new Script(config.codeRoot ? resolve(src, config.codeRoot): src, config.codeContextify || null);
                 await document.evaluate(script);
             }
 
@@ -113,6 +112,7 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
                     console.log(filename);
                 });
             });
+
         }
     } catch (error) {
         showUsage();
