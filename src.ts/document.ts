@@ -359,24 +359,16 @@ export class TableFragment extends Fragment {
                     // Determine each cells rowspan, colspan and alignment
                     table.push(line.substring(1, line.length - 1).split("|").map((cell, index) => {
 
-                        // Only a row extending cell (e.g. <<<^)
-                        const matchCheckRow = cell.replace(/\s/g, "").match(/^([<]*)\^$/);
-                        if (matchCheckRow) {
+                        // Only a row extending cell (i.e. ^)
+                        if (cell.trim() === "^") {
                             if (ri === 0) { throw new Error("cannot row extend top cells"); }
-
-                            const cols = matchCheckRow[1].length + 1;
 
                             const baseCol = table[ri - 1].filter((c) => (c.col === ci))[0];
                             if (baseCol == null) { throw new Error(`row extended cell column mismatch`); }
 
-                            if (baseCol.cols !== cols) {
-                                //console.log(table, lastCol, cols, ci);
-                                throw new Error("row extended cell column width mismatch");
-                            }
-
                             baseCol.rows++;
 
-                            ci += cols;
+                            ci += baseCol.cols;
 
                             return baseCol;
                         }
@@ -396,7 +388,7 @@ export class TableFragment extends Fragment {
                             if (cell.match(/^(\s*)/)[1].length <= 1) {
                                 align = CellAlign.LEFT;
                             } else if (cell.match(/(\s*)$/)[1].length <= 1) {
-                                align = CellAlign.CENTER;
+                                align = CellAlign.RIGHT;
                             }
                         }
 
@@ -435,7 +427,7 @@ export class TableFragment extends Fragment {
 
                 // Either create a new cell or reference the old one
                 let cell = null;
-                if (col.rows === -1) {
+                if (col.row !== ri) {
                     cell = this.#cells[getCellName(ri - 1, ci)];
                 } else {
                     cell = new CellNode(ri, ci, col.align, col.rows, col.cols, [ parseBlock(col.content, StylesInline) ]);
