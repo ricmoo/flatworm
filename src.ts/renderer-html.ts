@@ -294,6 +294,10 @@ export class HtmlRenderer extends Renderer {
                   output.push(`<td class="fix">&nbsp;</td>`);
                 output.push(`</tr>`);
               }
+              const title = fragment.title.textContent.trim();
+              if (title !== "") {
+                output.push(`<tr><td class="table-title" colspan="${ fragment.cols }">${ title }</td><td class="fix">&nbsp;</td></tr>`);
+              }
             output.push(`</table>`);
             /*
             const title = fragment.title.textContent.trim();

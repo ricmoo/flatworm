@@ -107,7 +107,6 @@ div.code {
     border: 2px solid #88a;
     color: #000;
     margin: 20px 0 30px 30px;
-    dddmargin-left: 30px;
     padding: 15px 20px;
     font-family: monospace;
     font-size: 18px;
@@ -516,21 +515,20 @@ code.inline {
 .content table.table {
     border-collapse: collapse;
     margin-top: 20px;
-    margin-left: 50px;
+    margin-left: 30px;
+    margin-bottom: 30px;
+    margin-right: -4px;     /* To compensate for the fix column */
 }
 
 .content table.table.compact {
-   dddtable-layout: fixed;
     width: 300px;
 }
 
 .content table.table.wide {
-   dddtable-layout: fixed;
     width: 500px;
 }
 
 .content table.table.full {
-   dddtable-layout: fixed;
     width: 750px;
 }
 
@@ -551,6 +549,12 @@ code.inline {
     width: 0;
 }
 
+.content table td.table-title {
+    border: none;
+    color: #777;
+    font-style: italic;
+    text-align: center;
+}
 
 .content .toc {
    margin: 20px 0 0 0px;
