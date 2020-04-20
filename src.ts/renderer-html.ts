@@ -278,7 +278,7 @@ export class HtmlRenderer extends Renderer {
                     const attrs = [ `align="${ cell.align }"` ];
                     if (cell.colspan !== 1) { attrs.push(`colspan="${ cell.colspan }"`); }
                     if (cell.rowspan !== 1) { attrs.push(`rowspan="${ cell.rowspan }"`); }
-                    if (fragment.style === TableStyle.COMPACT || fragment.style === TableStyle.WIDE) {
+                    if (fragment.style !== TableStyle.MINIMAL) {
                         let width = Math.floor(100 / fragment.cols);
                         if (c === 0) {
                             width = 100 - (fragment.cols - 1) * width + (cell.colspan - 1) * width;
