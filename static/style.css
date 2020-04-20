@@ -82,11 +82,31 @@ ul li {
     line-height: 30px;
 }
 
+div.code-title {
+    ddd-border: 1px solid green;
+    height: 7px;
+    margin-left: 30px;
+    margin-top: 10px;
+    position: relative;
+}
+    
+div.code-title div {
+    ddd-border: 1px solid red;
+    box-sizing: border-box;
+    color: #88a;
+    font-style: italic;
+    font-size: 18px;
+    padding-right: 10px;
+    position: absolute;
+    text-align: right;
+    width: 100%;
+}
+
 div.code {
     background: #f8f8ff;
     border: 2px solid #88a;
     color: #000;
-    margin: 20px 0 0 30px;
+    margin: 20px 0 30px 30px;
     dddmargin-left: 30px;
     padding: 15px 20px;
     font-family: monospace;
@@ -372,7 +392,7 @@ div.breadcrumbs span.current {
     font-style: italic;
     position: absolute;
     letter-spacing: 0.1ex;
-    padding-left: 25px;
+    padding-left: 18px;
 }
 
 .definition {
@@ -484,7 +504,7 @@ code.inline {
 
 .property .arrow {
     color: #888;
-    padding-left: 15px;
+    padding-left: 10px;
     padding-right: 5px;
 }
 
@@ -495,19 +515,27 @@ code.inline {
 
 .content table.table {
     border-collapse: collapse;
+    margin-top: 20px;
     margin-left: 50px;
 }
 
 .content table.table.compact {
+   dddtable-layout: fixed;
     width: 300px;
 }
 
 .content table.table.wide {
+   dddtable-layout: fixed;
     width: 500px;
 }
 
 .content table.table.full {
-    width: 700px;
+   dddtable-layout: fixed;
+    width: 750px;
+}
+
+.content table.table.full tr:nth-child(even) {
+    background-color: #f8f8f8;
 }
 
 .content table.table td {
@@ -516,6 +544,12 @@ code.inline {
     padding: 5px 20px;
 }
 
+.content table.table td.fix {
+    border: none;
+    padding-left: 0;
+    padding-right: 0;
+    width: 0;
+}
 
 
 .content .toc {

@@ -3,7 +3,7 @@
 import fs from "fs";
 import { resolve } from "path";
 
-import { CodeFragment, Document, Fragment, FragmentType, Page, TableFragment, TocFragment } from "./document";
+import { CodeFragment, Document, Fragment, FragmentType, Page, TableFragment, TableStyle, TocFragment } from "./document";
 
 import { ElementNode, LinkNode, ListNode, Node, PropertyNode, SymbolNode, TextNode } from "./markdown";
 import { ElementStyle, MarkdownStyle } from "./markdown";
@@ -249,6 +249,10 @@ export class HtmlRenderer extends Renderer {
         }
 
         if (fragment instanceof CodeFragment) {
+            const title = fragment.title.textContent.trim();
+            if (title) {
+              output.push(`<div class="code-title"><div>${ title }</div></div>`);
+            }
             if (fragment.evaluated) {
               output.push(`<div class="code">`);
                 fragment.code.forEach((line) => {
@@ -271,11 +275,24 @@ export class HtmlRenderer extends Renderer {
                   for (let c = 0; c < fragment.cols; c++) {
                     const cell = fragment.getCell(r, c);
                     if (!cell) { continue; }
-                    output.push(`<td align="${ cell.align }" colspan="${ cell.colspan } rowspan=${ cell.rowspan }">`)
+                    const attrs = [ `align="${ cell.align }"` ];
+                    if (cell.colspan !== 1) { attrs.push(`colspan="${ cell.colspan }"`); }
+                    if (cell.rowspan !== 1) { attrs.push(`rowspan="${ cell.rowspan }"`); }
+                    if (fragment.style === TableStyle.COMPACT || fragment.style === TableStyle.WIDE) {
+                        let width = Math.floor(100 / fragment.cols);
+                        if (c === 0) {
+                            width = 100 - (fragment.cols - 1) * width + (cell.colspan - 1) * width;
+                        } else {
+                            width *= cell.colspan;
+                        }
+                        attrs.push(`width="${ width }%"`);
+                    }
+                    output.push(`<td ${ attrs.join(" ") }>`)
                       output.push(this.renderMarkdown(cell.children));
                     output.push(`</td>`);
                   }
-                output.push(`<tr>`);
+                  output.push(`<td class="fix">&nbsp;</td>`);
+                output.push(`</tr>`);
               }
             output.push(`</table>`);
             /*
