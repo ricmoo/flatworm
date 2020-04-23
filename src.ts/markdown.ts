@@ -41,7 +41,8 @@ export class TextNode extends Node {
 export const SymbolNames: Array<string> = [
     "copy",
     "mdash", "ndash",
-    "div", "times", "le", "lt", "ge", "gt",
+//    "div", "times", "le", "lt", "ge", "gt",
+    "div", "times", "le", "ge",
     "eacute", "ouml",
     "Xi",
 ];
@@ -279,6 +280,82 @@ function simplify(result: Array<Node>, markdown: string, styles: ReadonlyArray<M
     return result;
 }
 
+const Months = [
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"
+];
+
+const Days = [
+    "Sunday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday"
+];
+
+export function expandMacro(macro: string): string {
+    const now = new Date();
+    switch (macro) {
+        case "year":
+            return String(now.getFullYear());
+        case "month":
+            return String(now.getMonth() + 1);
+        case "monthName":
+            return Months[now.getMonth()];
+        case "day":
+            return String(now.getDate());
+        case "dayName":
+            return Days[now.getDay()];
+        case "hour":
+            return String(now.getHours());
+        case "minute":
+            return String(now.getMinutes());
+        case "second":
+            return String(now.getSeconds());
+        case "timestamp":
+            return String(now.getTime());
+
+        case "today":
+            return [
+                Months[now.getMonth()], " ",
+                now.getDate(), " ",
+                now.getFullYear()
+            ].join("");
+
+        case "now": {
+            let hours = now.getHours();
+            let meridian = "am";
+            if (hours >= 12) {
+                hours -= 12;
+                meridian = "pm";
+            } else if (hours === 0) {
+                hours = 12;
+            }
+
+            return [
+                Months[now.getMonth()], " ",
+                now.getDate(), ", ",
+                now.getFullYear(), ", ",
+                hours, ":",
+                now.getMinutes(),
+                meridian
+            ].join("");
+        }
+
+        case "date":
+            return [
+                now.getFullYear(),
+                (now.getMonth() + 1),
+                now.getDate()
+            ].join("-");
+
+        case "time":
+            return [
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            ].join(":");
+    }
+    throw new Error(`unknown macro ${ JSON.stringify(macro) }`);
+}
+
 // splitBlocks should be called first to make the list is split properly;
 export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle>): Node {
     if (markdown === "") { return new TextNode(""); } // @TODO: something better? Filter...
@@ -365,7 +442,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
     }
 
     // Check for symbol names (i.e. &NAME;)
-    const matchSymbol = markdown.match(/^((?:.|\n)*?)&([a-z0-9]+);((?:.|\n)*)$/i);
+    const matchSymbol = markdown.match(/^((?:.|\n)*?)&(\$?[a-z0-9]+);((?:.|\n)*)$/i);
     if (matchSymbol) {
         candidates.push({
             offset: matchSymbol[1].length,
@@ -374,7 +451,12 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
                 if (matchSymbol[1]) {
                     simplify(result, matchSymbol[1], childStyles);
                 }
-                result.push(new SymbolNode(matchSymbol[2]));
+                const symbol = matchSymbol[2];
+                if (symbol[0] === "$") {
+                    result.push(new TextNode(expandMacro(symbol.substring(1))));
+                } else {
+                    result.push(new SymbolNode(symbol));
+                }
                 if (matchSymbol[3]) {
                     simplify(result, matchSymbol[3], childStyles);
                 }
