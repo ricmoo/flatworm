@@ -12,6 +12,7 @@ export declare class Config {
     readonly link: string;
     readonly copyright: string;
     readonly codeRoot: string;
+    readonly codeContextify: (context: any) => void;
     readonly externalLinks: Readonly<{
         [name: string]: ConfigLink;
     }>;

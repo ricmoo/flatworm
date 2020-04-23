@@ -1,6 +1,6 @@
 import type { Config } from "./config";
 import type { Line, Script } from "./script";
-import { MarkdownStyle, Node } from "./markdown";
+import { CellNode, MarkdownStyle, Node } from "./markdown";
 export declare type TocEntry = {
     depth: number;
     title: string;
@@ -16,7 +16,8 @@ export declare enum FragmentType {
     WARNING = "warning",
     CODE = "code",
     NULL = "null",
-    TOC = "toc"
+    TOC = "toc",
+    TABLE = "table"
 }
 export declare class Fragment {
     #private;
@@ -39,10 +40,9 @@ export declare class Fragment {
 }
 export declare class CodeFragment extends Fragment {
     #private;
-    readonly _filename: string;
-    constructor(filename: string);
-    get filename(): string;
-    get source(): string;
+    readonly heading: string;
+    readonly source: string;
+    constructor(heading: string, source: string);
     get language(): string;
     get code(): ReadonlyArray<Line>;
     evaluate(script: Script): Promise<void>;
@@ -51,6 +51,22 @@ export declare class CodeFragment extends Fragment {
 export declare class TocFragment extends Fragment {
     readonly items: ReadonlyArray<string>;
     constructor(body: string);
+}
+export declare enum TableStyle {
+    MINIMAL = "minimal",
+    COMPACT = "compact",
+    WIDE = "wide",
+    FULL = "full"
+}
+export declare class TableFragment extends Fragment {
+    #private;
+    readonly rows: number;
+    readonly cols: number;
+    constructor(value: string, body: string);
+    get style(): TableStyle;
+    getCell(row: number, col: number): CellNode;
+    getParentCell(row: number, col: number): CellNode;
+    _setDocument(document: Document): void;
 }
 export declare class Page {
     #private;

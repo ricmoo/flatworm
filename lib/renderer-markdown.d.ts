@@ -6,4 +6,5 @@ export declare class MarkdownRenderer extends Renderer {
     renderNode(node: Node): string;
     renderFragment(fragment: Fragment): string;
     renderPage(page: Page): string;
+    getSymbol(name: string): string;
 }

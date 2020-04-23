@@ -1,6 +1,8 @@
 import type { Document } from "./document";
 export declare abstract class Node {
     #private;
+    readonly id: number;
+    constructor();
     _setDocument(document: Document): void;
     get document(): Document;
     abstract get textContent(): string;
@@ -10,12 +12,18 @@ export declare class TextNode extends Node {
     constructor(content: string);
     get textContent(): string;
 }
+export declare const SymbolNames: Array<string>;
+export declare class SymbolNode extends TextNode {
+    readonly name: string;
+    constructor(name: string);
+}
 export declare enum ElementStyle {
     NORMAL = "normal",
     BOLD = "bold",
     ITALIC = "italic",
-    UNDERLINE = "Underline",
+    UNDERLINE = "underline",
     SUPER = "super",
+    STRIKE = "strike",
     CODE = "code",
     LINK = "link",
     LIST = "list",
@@ -24,7 +32,8 @@ export declare enum ElementStyle {
     NAME = "name",
     PARAMETERS = "parameters",
     ARROW = "arrow",
-    RETURNS = "returns"
+    RETURNS = "returns",
+    CELL = "cell"
 }
 export declare class ElementNode extends Node {
     readonly children: ReadonlyArray<Node>;
@@ -49,6 +58,19 @@ export declare class PropertyNode extends ElementNode {
     readonly returns: Node;
     constructor(isConstructor: boolean, name: string, parameters: string, returns: Node);
 }
+export declare enum CellAlign {
+    LEFT = "left",
+    CENTER = "center",
+    RIGHT = "right"
+}
+export declare class CellNode extends ElementNode {
+    readonly row: number;
+    readonly col: number;
+    readonly align: CellAlign;
+    readonly rowspan: number;
+    readonly colspan: number;
+    constructor(row: number, col: number, align: CellAlign, rowspan: number, colspan: number, children: Array<Node>);
+}
 export declare function escapeText(text: string): TextNode;
 export declare enum MarkdownStyle {
     BOLD = "bold",
@@ -56,9 +78,12 @@ export declare enum MarkdownStyle {
     UNDERLINE = "underline",
     CODE = "code",
     SUPER = "super",
+    STRIKE = "strike",
     LINK = "link",
     LIST = "list"
 }
 export declare const StylesAll: readonly MarkdownStyle[];
+export declare const StylesInline: readonly MarkdownStyle[];
+export declare function expandMacro(macro: string): string;
 export declare function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle>): Node;
 export declare function parseMarkdown(markdown: string, styles?: ReadonlyArray<MarkdownStyle>): Array<Node>;
