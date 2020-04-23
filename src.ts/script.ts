@@ -71,7 +71,9 @@ export class Script {
                 let padding = line.substring(0, line.indexOf("/"));
                 try {
                     const result = await runContext(filename, context, script.join("\n"));
-                    output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ result }` });
+                    result.split("\n").forEach((line) => {
+                        output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ line }` });
+                    });
                     if (line.replace(/\s/g, "").substring(0, ) !== "//!") { throw new Error("expected an Error"); }
                 } catch (error) {
                     if (line.replace(/\s/g, "").substring(0, ) !== "//!error") { throw error; }
@@ -83,7 +85,7 @@ export class Script {
 
                 if (showing) {
                     let classes = [ ];
-                    if (line.replace(/\s/g, "").match(/\/\/[^<]/)) {
+                    if (line.replace(/\s/g, "").match(/^\/\/[^<]/)) {
                         classes.push("comment");
                     }
                     output.push({ classes: classes, content: line });
