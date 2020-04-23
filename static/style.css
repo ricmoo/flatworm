@@ -239,7 +239,7 @@ div.breadcrumbs span.current {
 .sidebar .toc .link.title {
     font-size: 115%;
     font-weight: bold;
-    padding: 5px 10px 15px 20px;
+    padding: 15px 10px 15px 20px;
 }
 
 .sidebar .toc .link.title a {
@@ -461,6 +461,7 @@ code.inline {
     ddd-background: #eef;
     padding-left: 5px;
     padding-right: 5px;
+    white-space: nowrap;
 }
 
 .property {
@@ -631,4 +632,86 @@ code.inline {
 
 .footer .nav.next span {
     margin-left: 20px;
+}
+
+
+/* Format-dependent styles */
+
+html.single-page div.breadcrumbs {
+    padding: 10px 0 0 0;
+}
+
+html.single-page h1 {
+   border-top: none;
+}
+
+html.single-page .page-separator {
+    border-top: 3px solid #aaa;
+    margin: 50px 0 10px 15px;
+    height: 0;
+}
+
+html.single-page .footer {
+    padding: 0;
+}
+
+html.single-page .sidebar .toc .link a {
+    color: #fff;
+}
+
+html.single-page .sidebar .toc .link.selected a {
+    color: #000;
+}
+
+html.single-page .sidebar .toc .link a:hover {
+    color: #99a;
+}
+
+html.single-page .sidebar .toc .link.depth-2 {
+    background-color: #334;
+    padding-left: 30px;
+}
+
+html.single-page .sidebar .toc .link.depth-3 {
+    background-color: #334;
+    padding-left: 40px;
+}
+
+html.single-page .sidebar .toc .link.depth-4 {
+    background-color: #334;
+    padding-left: 50px;
+}
+
+html.single-page .sidebar .toc .link.depth-5 {
+    background-color: #334;
+    padding-left: 60px;
+}
+
+html.single-page .sidebar .toc .link.selected a:hover {
+    color: #888;
+}
+
+/*
+html.single-page .sidebar .toc .link {
+    dddtransition: background-color 0.3s linear;
+}
+*/
+
+html.single-page .sidebar .toc .link.selected {
+    dddbackground-color: #aac;
+    background-color: #282839;
+}
+
+html.single-page .sidebar .toc .link.title.selected {
+    background-color: #282839;
+}
+
+
+html.single-page .sidebar .toc .link.selected a {
+    ddd-color: #000;
+    color: #fff;
+}
+
+html.single-page .sidebar .toc .link.title.selected a {
+    color: #fff;
 }

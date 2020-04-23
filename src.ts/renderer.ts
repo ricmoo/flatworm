@@ -64,7 +64,6 @@ export class Renderer {
             try {
                 return this.renderFragment(fragment);
             } catch (error) {
-        console.log(fragment, error);
                 throw new Error(`${ error.message } [${ page.filename }]`);
             }
         }).join("");

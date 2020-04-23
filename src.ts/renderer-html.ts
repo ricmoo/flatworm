@@ -11,7 +11,7 @@ import { ElementStyle, MarkdownStyle } from "./markdown";
 import { File, Renderer } from "./renderer";
 
 const PageHeader = `<!DOCTYPE html>
-<html>
+<html class="PAGE_CLASS">
   <head>
     <title><!--TITLE--></title>
     <link rel="stylesheet" type="text/css" href="/static/style.css">
@@ -86,6 +86,24 @@ export class HtmlRenderer extends Renderer {
         super(filename || "index.html");
     }
 
+    getRelativeAnchor(url: string, fragment?: string): string {
+        return fragment;
+    }
+
+    getRelativeLink(url: string, fragment?: string): string {
+        return url + (fragment ? ("#" + fragment): "");
+    }
+
+    _getRelativeLink(url: string, fragment?: string): string {
+        if (url.indexOf("#") !== -1) {
+            if (fragment != null) { throw new Error("should not happen"); }
+            const comps = url.split("#");
+            url = comps[0];
+            fragment = comps[1];
+        }
+        return this.getRelativeLink(url, fragment);
+    }
+
     renderNode(node: Node): string {
         if (node instanceof SymbolNode) {
             return `&${ node.name };`;
@@ -97,8 +115,11 @@ export class HtmlRenderer extends Renderer {
             let url = node.link;
             let name = url;
             if (node.link.indexOf(":") === -1) {
-                url = node.document.getLinkUrl(node.link)
+                url = node.document.getLinkUrl(node.link);
                 name = node.document.getLinkName(node.link);
+                if (url.indexOf(":") === -1) {
+                    url = this._getRelativeLink(url);
+                }
             }
 
             if (node.children.length === 0) {
@@ -245,7 +266,7 @@ export class HtmlRenderer extends Renderer {
         const output = [ ];
 
         if (fragment.link) {
-            output.push(`<a name="${ fragment.link }"></a>`);
+            output.push(`<a name="${ this.getRelativeAnchor(fragment.page.path, fragment.link) }"></a>`);
         }
 
         if (fragment instanceof CodeFragment) {
@@ -299,19 +320,14 @@ export class HtmlRenderer extends Renderer {
                 output.push(`<tr><td class="table-title" colspan="${ fragment.cols }">${ title }</td><td class="fix">&nbsp;</td></tr>`);
               }
             output.push(`</table>`);
-            /*
-            const title = fragment.title.textContent.trim();
-            if (title !== "") {
-                output.push(`<div class="table compact footer">${ title }</div>`);
-            }
-            */
+
             return output.join("");
 
         } else if (fragment instanceof TocFragment) {
             output.push(`<div class="toc">`);
               fragment.page.toc.slice(1).forEach((entry) => {
                 const offset = (entry.depth - 1) * 28;
-                output.push(`<div style="padding-left: ${ offset }px"><span class="bullet">&bull;</span><a href="${ entry.path }">${ entry.title }</a></div>`)
+                output.push(`<div style="padding-left: ${ offset }px"><span class="bullet">&bull;</span><a href="${ this._getRelativeLink(entry.path) }">${ entry.title }</a></div>`)
               });
             output.push(`</div>`);
             return output.join("");
@@ -321,7 +337,11 @@ export class HtmlRenderer extends Renderer {
             case FragmentType.SECTION:
             case FragmentType.SUBSECTION:
             case FragmentType.HEADING: {
-                output.push(`<a name="${ fragment.autoLink }"></a>`);
+                output.push(`<a name="${ this.getRelativeAnchor(fragment.page.path, fragment.autoLink) }"></a>`);
+
+                // Allow sections to link by page path
+                const sectionLink = this.getRelativeAnchor(fragment.page.path);
+                if (sectionLink) { output.push(`<a name="${ sectionLink }"></a>`); }
 
                 const tag: string = ({ section: "h1", subsection: "h2", heading: "h3" })[fragment.tag];
                 output.push(`<${ tag } class="show-anchors"><div>`);
@@ -341,7 +361,7 @@ export class HtmlRenderer extends Renderer {
 
                   output.push(`<div class="anchors">`);
                     if (fragment.link !== "") {
-                      output.push(`<a class="self" href="#${ fragment.link || fragment.autoLink }"></a>`);
+                      output.push(`<a class="self" href="${ this.getRelativeLink(fragment.page.path, fragment.link || fragment.autoLink) }"></a>`);
                     }
 
                     const extSrc = fragment.getExtension("src");
@@ -367,7 +387,7 @@ export class HtmlRenderer extends Renderer {
                   output.push(`<div class="term">`);
                     output.push(this.renderMarkdown(fragment.title));
                     if (fragment.link) {
-                      output.push(`<div class="anchors"><a class="self" href="#${ fragment.link }"></a></div>`);
+                      output.push(`<div class="anchors"><a class="self" href="${ this.getRelativeLink(fragment.page.path, fragment.link) }"></a></div>`);
                     }
                   output.push(`</div>`)
                   output.push(`<div class="body">`)
@@ -383,7 +403,7 @@ export class HtmlRenderer extends Renderer {
                   output.push(this.renderMarkdown(fragment.title))
                   output.push(`<div class="anchors">`);
                     if (fragment.link) {
-                      output.push(`<a class="self" href="#${ fragment.link }"></a>`);
+                      output.push(`<a class="self" href="${ this.getRelativeLink(fragment.page.path, fragment.link) }"></a>`);
                     }
                     const extSrc = fragment.getExtension("src");
                     if (extSrc) {
@@ -415,6 +435,7 @@ export class HtmlRenderer extends Renderer {
         if (!options) { options = { }; }
 
         let header = PageHeader
+                     .replace("PAGE_CLASS", "paged")
                      .replace("<!--TITLE-->", (page.title || "Documentation"))
                      .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
                      .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
@@ -428,7 +449,7 @@ export class HtmlRenderer extends Renderer {
                 path = path.match(/(.*\/)([^/]+\/)/)[1];
                 const p = page.document.getPage(path);
                 const title = (p.sectionFragment.getExtension("nav") || p.title);
-               breadcrumbs.unshift(`<a href="${ p.path }">${ title }</a>`)
+                breadcrumbs.unshift(`<a href="${ p.path }">${ title }</a>`)
             }
 
             header = header.replace("<!--BREADCRUMBS-->", breadcrumbs.join("&nbsp;&nbsp;&raquo;&nbsp;&nbsp;"));
@@ -518,5 +539,116 @@ export class HtmlRenderer extends Renderer {
 
     getSymbol(name: string): string {
         return `&${ name };`;
+    }
+}
+
+export class SinglePageHtmlRenderer extends HtmlRenderer {
+
+    getRelativeAnchor(url: string, fragment?: string): string {
+        return (url + (fragment ? ("-%23-" + fragment): ""));
+    }
+
+    getRelativeLink(url: string, fragment?: string): string {
+        if (fragment) {
+            return `#${ url }-%23-${ fragment }`;
+        }
+        return `#${ url }`;
+    }
+
+    renderFragment(fragment: Fragment): string {
+        const output: Array<string> = [ ];
+        if (fragment instanceof TocFragment) {
+            output.push(`<div class="toc">`);
+              fragment.page.toc.slice(1).forEach((entry) => {
+                if (entry.depth !== 1) { return; }
+                const offset = (entry.depth - 1) * 28;
+                output.push(`<div style="padding-left: ${ offset }px"><span class="bullet">&bull;</span><a href="${ this._getRelativeLink(entry.path) }">${ entry.title }</a></div>`)
+              });
+            output.push(`</div>`);
+            return output.join("");
+        }
+        return super.renderFragment(fragment);
+    }
+
+    _renderSidebar(document: Document): string {
+        const output: Array<string> = [ ];
+
+        // Get the table of contents for the root page
+        const toc = document.toc.slice();
+
+        const path = "/";
+        const pageCount = path.split("/").length;
+
+        output.push(`<div class="link title"><a href="/single-page/">${ toc.shift().title }</a></div>`)
+        toc.forEach((entry) => {
+            let entryCount = entry.path.split("/").length;
+            if (entry.path.indexOf("#") >= 0) { entryCount++; }
+
+            let classes: Array<string> = [ ];
+
+            // Base node; always added
+            if (entryCount === 3) { classes.push("base"); }
+
+            if (entry.path.substring(0, path.length) === path) {
+                if (entryCount === pageCount) {
+                    // Myself
+                    classes.push("myself");
+                    classes.push("ancestor");
+                } else if (entryCount === pageCount + 1) {
+                    // Direct child
+                    classes.push("child");
+                }
+            }
+
+            // Ancestor
+            if (classes.indexOf("child") === -1) {
+                let basepath = entry.path.split("#")[0];
+                if (path.substring(0, basepath.length) === basepath) {
+                    classes.push("ancestor");
+                }
+            }
+
+            // A sibling of an ancestor // @TODO: USe the regex instead?
+            if (entry.path.indexOf("#") === -1) {
+                const comps = entry.path.split("/");
+                comps.pop();
+                comps.pop();
+                comps.push("");
+
+                const path = comps.join("/");
+                if (path.substring(0, path.length) === path) {
+                    classes.push("show");
+                }
+            }
+
+            if (classes.length === 0) { classes.push("hide"); }
+            classes.push("link");
+            classes.push("depth-" + entry.depth);
+
+            output.push(`<div class="show ${ classes.join(" ") }"><a href="${ this._getRelativeLink(entry.path) }">${ entry.title }</a></div>`);
+        });
+
+        return output.join("");
+    }
+
+    renderDocument(document: Document): Array<File> {
+        const pages = document.toc.map((entry) => {
+            const page = document.getPage(entry.path);
+            return Renderer.prototype.renderPage.call(this, page);
+        }).join(`<div class="page-separator"></div>`);
+
+        const header = PageHeader
+                       .replace("PAGE_CLASS", "single-page")
+                       .replace("<!--TITLE-->", (document.config.title || "Documentation"))
+                       .replace("<!--BANNER_TITLE-->", (document.config.title || "TITLE"))
+                       .replace("<!--BANNER_SUBTITLE-->", (document.config.subtitle || "SUBTITLE"))
+                       .replace("<!--SIDEBAR-->", this._renderSidebar(document));
+
+        const footer = PageFooter.replace("<!--COPYRIGHT-->", this.renderMarkdown(document.copyright));
+
+        return [ {
+            filename: this.filename,
+            content: (header + pages + footer)
+        } ];
     }
 }

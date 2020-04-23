@@ -7,7 +7,7 @@ import { dirname, resolve } from "path";
 
 import { Config } from "./config";
 import { Document } from "./document";
-import { HtmlRenderer } from "./renderer-html";
+import { HtmlRenderer, SinglePageHtmlRenderer } from "./renderer-html";
 import { MarkdownRenderer } from "./renderer-markdown";
 import { Script } from "./script";
 
@@ -101,8 +101,10 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
 
             const renderers = [
                 new HtmlRenderer(),
-                new MarkdownRenderer()
+                new MarkdownRenderer(),
+                new SinglePageHtmlRenderer("single-page/index.html")
             ];
+
             renderers.forEach((renderer) => {
                 const files = renderer.renderDocument(document);
                 files.forEach((file) => {
