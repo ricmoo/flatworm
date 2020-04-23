@@ -5,21 +5,34 @@ export {
     LinkNode,
     ListNode,
     PropertyNode,
+    CellNode,
+    SymbolNode,
+
+    SymbolNames,
+
+    CellAlign,
 
     ElementStyle,
     MarkdownStyle,
 
     escapeText,
+    expandMacro,
     parseBlock,
-    parseMarkdown
+    parseMarkdown,
+
+    StylesAll,
+    StylesInline
 } from "./markdown"
 
 export {
     Fragment,
     CodeFragment,
+    TableFragment,
     TocFragment,
     Page,
     Document,
+
+    TableStyle,
 
     TocEntry,
 
@@ -31,5 +44,5 @@ export { Line, Script } from "./script"
 
 export { File, Renderer } from "./renderer"
 
-export { HtmlRenderer } from "./renderer-html";
+export { HtmlRenderer, SinglePageHtmlRenderer } from "./renderer-html";
 export { MarkdownRenderer } from "./renderer-markdown";
