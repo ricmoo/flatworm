@@ -231,29 +231,6 @@ export class CodeFragment extends Fragment {
         return this.getExtension("lang");
     }
 
-    /*
-    get filename(): string {
-        return resolve(dirname(this.page.filename), this._filename);
-    }
-
-    #source: string;
-    get source(): string {
-        if (this.#source == null) {
-            this.#source = fs.readFileSync(this.filename).toString();
-        }
-        return this.#source;
-    }
-
-    get language(): string {
-        switch (extname(this.filename)) {
-            case ".js":     return "javascript";
-            case ".txt":    return "text";
-            case ".source": return "source"
-        }
-        return "unknown";
-    }
-    */
-
     #code: ReadonlyArray<Line>;
     get code(): ReadonlyArray<Line> {
         if (this.#code == null) {
@@ -469,6 +446,17 @@ export class TableFragment extends Fragment {
 
     getParentCell(row: number, col: number) {
         return this.#cells[getCellName(row, col)];
+    }
+
+    _setDocument(document: Document): void {
+        super._setDocument(document);
+        const done: { [ id: number ]: boolean } = { };
+        Object.keys(this.#cells).forEach((name) => {
+            const cell = this.#cells[name];
+            if (done[cell.id]) { return; }
+            done[cell.id] = true;
+            cell._setDocument(document);
+        });
     }
 }
 
