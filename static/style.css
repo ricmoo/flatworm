@@ -515,6 +515,7 @@ code.inline {
 
 .content table.table {
     border-collapse: collapse;
+    box-sizing: border-box;
     margin-top: 20px;
     margin-left: 30px;
     margin-bottom: 30px;
@@ -530,13 +531,14 @@ code.inline {
 }
 
 .content table.table.full {
-    width: 750px;
+    width: 774px;  /* Accomodate the empty end cell to maintain spacing*/
 }
 
+/*
 .content table.table.full tr:nth-child(even) {
     background-color: #f8f8f8;
 }
-
+*/
 .content table.table td {
     border: 2px solid #88a;
     color: #444;
