@@ -542,7 +542,7 @@ export class Page {
                     const path = this.path + item + "/";
                     const page = this.document.getPage(path);
                     if (page == null) {
-                        throw new Error(`missing toc page %{ JSON.stringify(item) }`);
+                        throw new Error(`missing toc page ${ JSON.stringify(item) }`);
                     }
                     page.toc.forEach((item) => {
                         const depth = item.depth + 1;
@@ -700,16 +700,18 @@ export class Document {
 
             page.fragments.forEach((fragment) => {
                 if (fragment.link) {
+                    const pagePath = page.path + ((fragment.tag !== FragmentType.SECTION) ? ("#" + fragment.link): "");
+
                     const existing = links[fragment.link];
                     if (existing) {
                         // @TODO: Fill this in with sources
-                        throw new Error("duplicate link");
+                        throw new Error(`duplicate link ${ JSON.stringify(fragment.link) } [ ${ JSON.stringify(existing.url) }, ${ JSON.stringify(pagePath) } ]`);
                     }
 
                     links[fragment.link] = Object.freeze({
                         name: fragment.value.replace(/(\*\*|\/\/|__|\^\^|``)/g, ""),
                         source: page.filename,
-                        url: (page.path + ((fragment.tag !== FragmentType.SECTION) ? ("#" + fragment.link): ""))
+                        url: pagePath
                     });
                 }
             });
