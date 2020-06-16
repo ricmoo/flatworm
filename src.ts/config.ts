@@ -17,6 +17,8 @@ export class Config {
     readonly subtitle: string;
     readonly logo: string;
 
+    readonly prefix: string;
+
     // The link the documentations will be deployed to
     readonly link: string;
 
@@ -60,6 +62,11 @@ export class Config {
         this.link = config.link || null;
         this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
 
+        this.prefix = config.prefix || null;
+        if (this.prefix && !this.prefix.match(/^\/[a-z]+[a-z0-9_-]*$/i)) {
+            throw new Error("invalid prefix: ${ JSON.stringify(this.prefix) }");
+        }
+
         this.codeRoot = config.codeRoot || null;
         this.codeContextify = config.codeContextify || (() => { });
 
@@ -68,6 +75,12 @@ export class Config {
             markdown.banner = (config.markdown.banner || null);
         }
         this.markdown = markdown;
+    }
+
+    getPath(path: string): string {
+        // @TODO: Move more of the page path logic here
+        if (this.prefix == null) { return path; }
+        return this.prefix + path;
     }
 
     getSourceUrl(key: string, value: string): string {
