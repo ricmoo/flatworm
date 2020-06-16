@@ -74,6 +74,16 @@ function namify(words: string): string {
     return words.toLowerCase().replace(/[^a-z0-9_-]+/gi, " ").split(" ").filter((w) => (!!w)).join("-");
 }
 
+/*
+function visit(node: Node, visiter: (node: Node) => void): void {
+    visiter(node);
+    if (node instanceof ElementNode) {
+        node.children.forEach((c) => visit(c, visiter
+        ));
+    }
+}
+*/
+
 export class Fragment {
     readonly tag: FragmentType;
     readonly value: string;
@@ -166,8 +176,8 @@ export class Fragment {
 
 
     _setDocument(document: Document): void {
-        this.body.forEach((n) => n._setDocument(document));
-        if (this.title) { this.title._setDocument(document); }
+        this.body.forEach((n) => n._setDocument(document, this.page, this));
+        if (this.title) { this.title._setDocument(document, this.page, this); }
     }
 
     _setPage(page: Page, parents: Array<Fragment>): void {
@@ -246,6 +256,19 @@ export class CodeFragment extends Fragment {
 
         if (this.language === "javascript") {
            this.#code = Object.freeze(await script.run("script.js", this.source));
+        } else if (this.language === "script") {
+            this.#code = Object.freeze(this.source.split("\n").map((line) => {
+                let classes = [ ];
+                const check = line.replace(/\s/g, "");
+                if (check.match(/^\/\/!/)) {
+                    classes.push("result");
+                    classes.push("ok");
+                    line = line.replace(/!/, "");
+                } else if (check.match(/^\/\//)) {
+                    classes.push("comment");
+                }
+                return { classes: classes, content: line };
+            }));
         }
     }
 
@@ -455,7 +478,7 @@ export class TableFragment extends Fragment {
             const cell = this.#cells[name];
             if (done[cell.id]) { return; }
             done[cell.id] = true;
-            cell._setDocument(document);
+            cell._setDocument(document, this.page, this);
         });
     }
 }
@@ -478,9 +501,14 @@ export class Page {
     readonly title: string;
     readonly sectionFragment: Fragment;
 
-    constructor(filename: string, fragments: Array<Fragment>) {
+    readonly modifiedDate: Date;
+
+    constructor(filename: string, fragments: Array<Fragment>, options?: { modifiedDate?: Date }) {
         this.filename = resolve(filename);
         this.fragments = Object.freeze(fragments);
+
+        if (options == null) { options = { }; }
+        this.modifiedDate = (options.modifiedDate || (new Date()));
 
         let title: string = null;
         let sectionFragment: Fragment = null;
@@ -597,7 +625,7 @@ export class Page {
             }
             if (path.substring(path.length - 1) !== "/") { path += "/"; }
 
-            this.#pathCache = path;
+            this.#pathCache = this.#document.config.getPath(path);
         }
 
         return this.#pathCache;
@@ -617,6 +645,8 @@ export class Page {
         let body: Array<string> = [ ];
 
         let inCode = false;
+
+        const mtime = fs.statSync(filename).mtime;
 
         // Parse out all the fragments
         const lines = fs.readFileSync(filename).toString().split("\n");
@@ -652,7 +682,7 @@ export class Page {
             fragments.push(Fragment.from(tag, value, body.join("\n").trim()));
         }
 
-        return new Page(resolve(filename), fragments);
+        return new Page(resolve(filename), fragments, { modifiedDate: mtime });
     }
 }
 
@@ -720,8 +750,8 @@ export class Document {
         this.#links = Object.freeze(links);
     }
 
-    get copyright(): Array<Node> {
-        return this.parseMarkdown(this.config.copyright);
+    get names(): Array<string> {
+        return Object.keys(this.#links);
     }
 
     getLinkName(name: string): string {
@@ -740,10 +770,14 @@ export class Document {
         return this.pages.filter((p) => (p.path === path))[0] || null;
     }
 
+    get copyright(): Array<Node> {
+        return this.parseMarkdown(this.config.copyright);
+    }
+
     #toc: ReadonlyArray<Readonly<TocEntry>>;
     get toc(): ReadonlyArray<Readonly<TocEntry>> {
         if (this.#toc == null) {
-            const rootPage = this.getPage("/");
+            const rootPage = this.getPage(this.config.getPath("/"));
             if (rootPage == null) { throw new Error("missing root page"); }
             this.#toc = rootPage.toc.filter((e) => (e.path.indexOf("#") === -1))
         }
@@ -752,7 +786,7 @@ export class Document {
 
     parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node> {
         const nodes = parseMarkdown(markdown, styles);
-        nodes.forEach((n) => n._setDocument(this));
+        nodes.forEach((n) => n._setDocument(this, null, null));
         return nodes;
     }
 
