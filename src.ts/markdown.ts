@@ -1,6 +1,6 @@
 "use strict";
 
-import type { Document } from "./document";
+import type { Document, Fragment, Page } from "./document";
 
 let NextId = 1;
 
@@ -12,13 +12,25 @@ export abstract class Node {
     }
 
     #document: Document;
-    _setDocument(document: Document): void {
+    #page: Page;
+    #fragment: Fragment;
+    _setDocument(document: Document, page: Page, fragment: Fragment): void {
         if (this.#document) { throw new Error("already has a document"); }
         this.#document = document;
+        this.#page = page;
+        this.#fragment = fragment;
     }
 
     get document(): Document {
         return this.#document;
+    }
+
+    get page(): Page {
+        return this.#page;
+    }
+
+    get fragment(): Fragment {
+        return this.#fragment;
     }
 
     abstract get textContent(): string;
@@ -34,6 +46,33 @@ export class TextNode extends Node {
 
     get textContent(): string {
         return this.content;
+    }
+}
+
+export class MacroNode extends TextNode {
+    readonly macro: string;
+    readonly now: Date;
+
+    static expandMacro(macro: string, now?: Date): string {
+        if (now == null) { now = new Date(); }
+        return expandMacro(macro, now);
+    }
+
+    #modifiedDate: Date;
+    _setModifiedDate(date: Date) {
+        if (this.#modifiedDate) { throw new Error("modifiedDate already set"); }
+        this.#modifiedDate = date;
+    }
+
+    constructor(macro: string) {
+        super(MacroNode.expandMacro(macro));
+
+        this.now = new Date();
+        this.macro = macro;
+    }
+
+    get textContent(): string {
+        return MacroNode.expandMacro(this.macro, this.now);
     }
 }
 
@@ -108,9 +147,9 @@ export class ElementNode extends Node {
         this.children = Object.freeze(<Array<Node>>children);
     }
 
-    _setDocument(document: Document): void {
-        super._setDocument(document);
-        this.children.forEach((c) => c._setDocument(document));
+    _setDocument(document: Document, page: Page, fragment: Fragment): void {
+        super._setDocument(document, page, fragment);
+        this.children.forEach((c) => c._setDocument(document, page, fragment));
     }
 
     get textContent(): string {
@@ -290,8 +329,12 @@ const Days = [
     "Thursday", "Friday", "Saturday"
 ];
 
-export function expandMacro(macro: string): string {
-    const now = new Date();
+export function expandMacro(macro: string, now: Date): string {
+    //    if (macro == "modified" && options.modifiedDate) {
+    //    now = options.modifiedDate;
+    //    macro = "now";
+    //}
+
     switch (macro) {
         case "year":
             return String(now.getFullYear());
@@ -453,7 +496,7 @@ export function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle
                 }
                 const symbol = matchSymbol[2];
                 if (symbol[0] === "$") {
-                    result.push(new TextNode(expandMacro(symbol.substring(1))));
+                    result.push(new MacroNode(symbol.substring(1)));
                 } else {
                     result.push(new SymbolNode(symbol));
                 }
