@@ -74,7 +74,10 @@ export declare class Page {
     readonly filename: string;
     readonly title: string;
     readonly sectionFragment: Fragment;
-    constructor(filename: string, fragments: Array<Fragment>);
+    readonly modifiedDate: Date;
+    constructor(filename: string, fragments: Array<Fragment>, options?: {
+        modifiedDate?: Date;
+    });
     get toc(): ReadonlyArray<Readonly<TocEntry>>;
     get document(): Document;
     get path(): string;
@@ -87,10 +90,11 @@ export declare class Document {
     readonly pages: ReadonlyArray<Page>;
     readonly config: Config;
     constructor(basepath: string, pages: Array<Page>, config: Config);
-    get copyright(): Array<Node>;
+    get names(): Array<string>;
     getLinkName(name: string): string;
     getLinkUrl(name: string): string;
     getPage(path: string): Page;
+    get copyright(): Array<Node>;
     get toc(): ReadonlyArray<Readonly<TocEntry>>;
     parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node>;
     evaluate(script: Script): Promise<void>;

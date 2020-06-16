@@ -1,15 +1,26 @@
-import type { Document } from "./document";
+import type { Document, Fragment, Page } from "./document";
 export declare abstract class Node {
     #private;
     readonly id: number;
     constructor();
-    _setDocument(document: Document): void;
+    _setDocument(document: Document, page: Page, fragment: Fragment): void;
     get document(): Document;
+    get page(): Page;
+    get fragment(): Fragment;
     abstract get textContent(): string;
 }
 export declare class TextNode extends Node {
     readonly content: string;
     constructor(content: string);
+    get textContent(): string;
+}
+export declare class MacroNode extends TextNode {
+    #private;
+    readonly macro: string;
+    readonly now: Date;
+    static expandMacro(macro: string, now?: Date): string;
+    _setModifiedDate(date: Date): void;
+    constructor(macro: string);
     get textContent(): string;
 }
 export declare const SymbolNames: Array<string>;
@@ -39,7 +50,7 @@ export declare class ElementNode extends Node {
     readonly children: ReadonlyArray<Node>;
     readonly style: ElementStyle;
     constructor(style: ElementStyle, children: string | Array<string | Node>);
-    _setDocument(document: Document): void;
+    _setDocument(document: Document, page: Page, fragment: Fragment): void;
     get textContent(): string;
 }
 export declare class LinkNode extends ElementNode {
@@ -84,6 +95,6 @@ export declare enum MarkdownStyle {
 }
 export declare const StylesAll: readonly MarkdownStyle[];
 export declare const StylesInline: readonly MarkdownStyle[];
-export declare function expandMacro(macro: string): string;
+export declare function expandMacro(macro: string, now: Date): string;
 export declare function parseBlock(markdown: string, styles: ReadonlyArray<MarkdownStyle>): Node;
 export declare function parseMarkdown(markdown: string, styles?: ReadonlyArray<MarkdownStyle>): Array<Node>;
