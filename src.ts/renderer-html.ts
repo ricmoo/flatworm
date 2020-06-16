@@ -204,11 +204,13 @@ export class HtmlRenderer extends Renderer {
         // Get the table of contents for the root page
         const toc = page.document.toc.slice();
 
-        const pageCount = page.path.split("/").length;
+        let pageCount = page.path.split("/").length;
+        if (page.document.config.prefix) { pageCount--; }
 
-        output.push(`<div class="link title"><a href="/">${ toc.shift().title }</a></div>`)
+        output.push(`<div class="link title"><a href="${ page.document.config.getPath("/") }">${ toc.shift().title }</a></div>`)
         toc.forEach((entry) => {
             let entryCount = entry.path.split("/").length;
+            if (page.document.config.prefix) { entryCount--; }
             if (entry.path.indexOf("#") >= 0) { entryCount++; }
 
             let classes: Array<string> = [ ];
@@ -435,6 +437,9 @@ export class HtmlRenderer extends Renderer {
         if (!options) { options = { }; }
 
         let header = PageHeader
+                     .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                         return `${ tag }="${ page.document.config.getPath(path) }"`;
+                     })
                      .replace("PAGE_CLASS", "paged")
                      .replace("<!--TITLE-->", (page.title || "Documentation"))
                      .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
@@ -444,8 +449,9 @@ export class HtmlRenderer extends Renderer {
         if (options.breadcrumbs) {
             const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
 
+            const root = page.document.config.getPath("/");
             let path = page.path;
-            while (path !== "/") {
+            while (path !== root) {
                 path = path.match(/(.*\/)([^/]+\/)/)[1];
                 const p = page.document.getPage(path);
                 const title = (p.sectionFragment.getExtension("nav") || p.title);
@@ -462,7 +468,11 @@ export class HtmlRenderer extends Renderer {
         if (options == null) { options = { }; }
 
         // Add the copyright to the footer
-        let footer = PageFooter.replace("<!--COPYRIGHT-->", this.renderMarkdown(page.document.copyright));
+        let footer = PageFooter
+                     .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                         return `${ tag }="${ page.document.config.getPath(path) }"`;
+                     })
+                     .replace("<!--COPYRIGHT-->", this.renderMarkdown(page.document.copyright));
 
         // Add the next and previous links to the footer
         const navItems = page.document.toc;
@@ -499,6 +509,8 @@ export class HtmlRenderer extends Renderer {
     renderDocument(document: Document): Array<File> {
         const files: Array<File> = [ ];
 
+        const base = document.config.getPath("/static/").substring(1);
+
         // Copy all static files
         [
             "link.svg",
@@ -512,21 +524,31 @@ export class HtmlRenderer extends Renderer {
             "script.js",
             "style.css"
         ].forEach((filename) => {
+            let content: string | Buffer = fs.readFileSync(resolve(__dirname, "../static", filename));
+
+            // Re-write CSS urls to match the prefix
+            if (filename.match(/\.css$/)) {
+                console.log("Found: " + filename);
+                content = content.toString().replace(/(url\(['"]?)(\/[^"')]*)(['"]?\))/gi, (all, prefix, href, suffix) => {
+                    return (prefix + document.config.getPath(href) + suffix);
+                });
+            }
+
             files.push({
-                filename: `static/${ filename }`,
-                content: fs.readFileSync(resolve(__dirname, "../static", filename))
+                filename: (base + filename),
+                content: content
             });
         });
 
         // Copy over the logo, allowing for a custom override
         if (document.config.logo) {
             files.push({
-                filename: "static/logo.svg",
+                filename: (base + "logo.svg"),
                 content: fs.readFileSync(resolve(document.basepath, document.config.logo))
             });
         } else {
             files.push({
-                filename: "static/logo.svg",
+                filename: (base + "logo.svg"),
                 content: fs.readFileSync(resolve(__dirname, "../static/logo.svg"))
             });
         }
@@ -579,7 +601,7 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
         const path = "/";
         const pageCount = path.split("/").length;
 
-        output.push(`<div class="link title"><a href="/single-page/">${ toc.shift().title }</a></div>`)
+        output.push(`<div class="link title"><a href="${ document.config.getPath("/single-page/") }">${ toc.shift().title }</a></div>`)
         toc.forEach((entry) => {
             let entryCount = entry.path.split("/").length;
             if (entry.path.indexOf("#") >= 0) { entryCount++; }
@@ -638,16 +660,23 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
         }).join(`<div class="page-separator"></div>`);
 
         const header = PageHeader
+                       .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                           return `${ tag }="${ document.config.getPath(path) }"`;
+                       })
                        .replace("PAGE_CLASS", "single-page")
                        .replace("<!--TITLE-->", (document.config.title || "Documentation"))
                        .replace("<!--BANNER_TITLE-->", (document.config.title || "TITLE"))
                        .replace("<!--BANNER_SUBTITLE-->", (document.config.subtitle || "SUBTITLE"))
                        .replace("<!--SIDEBAR-->", this._renderSidebar(document));
 
-        const footer = PageFooter.replace("<!--COPYRIGHT-->", this.renderMarkdown(document.copyright));
+        const footer = PageFooter
+                       .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                           return `${ tag }="${ document.config.getPath(path) }"`;
+                       })
+                       .replace("<!--COPYRIGHT-->", this.renderMarkdown(document.copyright));
 
         return [ {
-            filename: this.filename,
+            filename: document.config.getPath("/" + this.filename).substring(1),
             content: (header + pages + footer)
         } ];
     }
