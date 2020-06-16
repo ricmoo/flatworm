@@ -4,16 +4,25 @@ import _module from "module";
 import { resolve } from "path";
 import vm from "vm";
 
-async function runContext(filename: string, context: any, code: string): Promise<string> {
+async function runContext(filename: string, context: any, code: string, needsAsync?: string): Promise<string> {
     let promise = false;
+
+    if (needsAsync) {
+        code = `(async function() { ${ code }; return ${ needsAsync }; })()`;
+    }
 
     const script = new vm.Script(code, { filename: filename });
     let result = script.runInContext(context, { timeout: 5000 });
-    if (result instanceof Promise) {
+    if (result && result.then) {
         result = await result;
         promise = true;
     }
     context._ = result;
+
+    if (needsAsync) {
+        promise = false;
+        context[needsAsync] = result;
+    }
 
     result = (new vm.Script("_inspect(_)", { filename: filename })).runInContext(context);
 
@@ -70,14 +79,19 @@ export class Script {
             if (line.trim().substring(0, 3) === "//!") {
                 let padding = line.substring(0, line.indexOf("/"));
                 try {
-                    const result = await runContext(filename, context, script.join("\n"));
-                    result.split("\n").forEach((line) => {
-                        output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ line }` });
-                    });
-                    if (line.replace(/\s/g, "").substring(0, ) !== "//!") { throw new Error("expected an Error"); }
+                    const needsAsync = line.match(/^\s*\/\/!\s*async\s+(.*)$/);
+                    const result = await runContext(filename, context, script.join("\n"), (needsAsync ? needsAsync[1]: null));
+                    if (showing) {
+                        result.split("\n").forEach((line) => {
+                            output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ line }` });
+                        });
+                    }
+                    if (line.replace(/\s/g, "") === "/\/!error") { throw new Error("expected an Error"); }
                 } catch (error) {
-                    if (line.replace(/\s/g, "").substring(0, ) !== "//!error") { throw error; }
-                    output.push({ classes: [ "result", "error" ], content: `${ padding }// Error: ${ error.message }` });
+                    if (line.replace(/\s/g, "") !== "/\/!error") { throw error; }
+                    if (showing) {
+                        output.push({ classes: [ "result", "error" ], content: `${ padding }// Error: ${ error.message }` });
+                    }
                 }
                 script = [ ];
             } else {
