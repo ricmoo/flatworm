@@ -1,16 +1,18 @@
 "use strict";
 
 (async function() {
-
+  const stopWords = "a an and as at for from in of on the with".split(/ /g);
   function search(words) {
     const blocks = [ ];
     const tally = { };
     const skipped = [ ];
-    const searchWords = { };
+    const searchWords = [ ];
+
+    // For each word...
     const leftover = words.replace(/([a-z][a-z0-9]*)/ig, (all, word) => {
-      word = word.toLowerCase();
-      searchWords[word] = true;
-      word = "_" + word;
+      if (stopWords.indexOf(word.toLowerCase()) >= 0) { return ("|stop:" + word + "|"); }
+      if (searchWords.indexOf(word) === -1) { searchWords.push(word); }
+      word = "_" + word.toLowerCase();
       const found = data.indices[word];
       if (found) {
         found.forEach((block) => {
@@ -18,19 +20,30 @@
           const comps = block.split("/");
           if (tally[block] == null) { tally[block] = 0; }
           if (tally[comps[0]] == null) { tally[comps[0]] = 0; }
-          tally[block] += 1;
+
+          // Give the summary and the summary block some clout
           tally[comps[0]] += 1;
+          tally[block] += 1;
+
+          // Give a little extra clout if the title matching
+          const title = (((data.summaries[comps[0]] || {}).title) || "");
+          if (title.indexOf(word.substring(1)) >= 0) {
+              tally[comps[0]] += 1;
+          }
         });
       }
+      // Return this to detect unprocessed characters
       return "|";
     });
+
+    // What parts of the search query di we discard?
     leftover.split("|").forEach((junk) => {
       junk = junk.trim();
       if (junk) { skipped.push(junk); }
     });;
-    console.log("Skipped:", skipped);
-    console.log(blocks);
+    console.log("Skipped: " + skipped.map((i) => JSON.stringify(i)).join(", "));
 
+    // Score each block
     const scores = blocks.reduce((accum, block) => {
       const comps = block.split("/");
       accum[block] = 11 * tally[block] + 3 * tally[comps[0]];
@@ -40,7 +53,7 @@
     const result = Object.keys(scores);
     result.sort((a, b) => (scores[b] - scores[a]));
 
-    console.log(scores, result);
+    //console.log(scores, result);
 
     let lastComps = [ -1, -1 ];
     const output = [ ];
@@ -76,28 +89,34 @@
   const footer = document.querySelector("div.content div.footer");
 
   function htmlify(parent, text, searchWords) {
-      let current = [ ];
+      let current = "";
       function flush() {
         if (current.length > 0) {
           const span = document.createElement("span");
-          span.textContent = current.join("");
+          span.textContent = current;
           parent.appendChild(span);
-          current = [ ];
+          current = "";
         }
       }
 
-      text.split(/([a-z0-9]+)/ig).forEach((chunk) => {
-          if (searchWords[chunk.toLowerCase()]) {
-            flush();
-            //current = [ ];
-            const span = document.createElement("span");
-            span.className = "highlight";
-            span.textContent = chunk;
-            parent.appendChild(span);
-          } else {
-            current.push(chunk);
+      for (let i = 0; i < text.length; i++) {
+          current += text[i];
+          for (let j = 0; j < searchWords.length; j++) {
+            const word = searchWords[j];
+            const offset = current.length - word.length;
+            const tailValue = current.substring(offset);
+            if (tailValue.toLowerCase() === word) {
+              current = current.substring(0, offset);
+              flush();
+
+              const span = document.createElement("span");
+              span.className = "highlight";
+              span.textContent = tailValue;
+              parent.appendChild(span);
+              break;
+            }
           }
-      });
+      }
 
       flush();
 
@@ -108,7 +127,7 @@
     title = title.split(/=>|\(/)[0];
     title = title.replace(/--/g, "\xbb");
 
-    const titleA = htmlify(document.createElement(link ? "a": "span"), title, searchWords || { });
+    const titleA = htmlify(document.createElement(link ? "a": "span"), title, searchWords || [ ]);
     if (link) {
       titleA.setAttribute("href", link);
     }
@@ -123,7 +142,8 @@
     }
   }
 
-  const words = (location.search.split("search=")[1] || "");
+  const words = decodeURIComponent((location.search.split("search=")[1] || "").replace(/\+/g, " "));
+  document.getElementById("search").value = words;
   const { results, searchWords } = search(words);
   if (results.length === 0) {
      appendBlock("No Results.")
