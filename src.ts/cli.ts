@@ -9,6 +9,7 @@ import { Config } from "./config";
 import { Document } from "./document";
 import { HtmlRenderer, SinglePageHtmlRenderer } from "./renderer-html";
 import { MetadataRenderer } from "./renderer-metadata";
+import { SearchRenderer } from "./renderer-search";
 import { MarkdownRenderer } from "./renderer-markdown";
 import { Script } from "./script";
 
@@ -104,7 +105,8 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
                 new HtmlRenderer(),
                 new MarkdownRenderer(),
                 new SinglePageHtmlRenderer("single-page/index.html"),
-                new MetadataRenderer()
+                new MetadataRenderer(),
+                new SearchRenderer()
             ];
 
             renderers.forEach((renderer) => {

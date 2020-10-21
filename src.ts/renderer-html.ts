@@ -3,6 +3,7 @@
 import fs from "fs";
 import { resolve } from "path";
 
+import type { Config } from "./config";
 import { CodeFragment, Document, Fragment, FragmentType, Page, TableFragment, TableStyle, TocFragment } from "./document";
 
 import { ElementNode, LinkNode, ListNode, Node, PropertyNode, SymbolNode, TextNode } from "./markdown";
@@ -20,10 +21,14 @@ const PageHeader = `<!DOCTYPE html>
     <div class="sidebar">
       <div class="header">
         <div class="logo"><a href="/"><div class="image"></div><div class="name"><!--BANNER_TITLE--></div><div class="version"><!--BANNER_SUBTITLE--></div></a></div>
+        <div class="search"><form action="/search/" method="GET"><input name="search" id="search" /></form><span class="search-icon">&#9906;</span></div>
       </div>
       <div class="toc"><div>
         <!--SIDEBAR-->
       </div></div>
+      <div class="footer">
+        <!--ALTLINK-->
+      </div>
     </div>
     <div class="content">
       <div class="breadcrumbs"><!--BREADCRUMBS--></div>
@@ -37,9 +42,12 @@ const PageFooter = `
       <div class="copyright"><!--COPYRIGHT--></div>
     </div>
     <script src="/static/script.js" type="text/javascript"></script>
+    <!--EXTRASCRIPT-->
   </body>
 </html>
 `;
+
+const SearchScript = '<script src="/static/search.js" type="text/javascript"></script>'
 
 const Tags: { [ style: string ]: string } = { };
 Tags[ElementStyle.BOLD] = "b";
@@ -433,11 +441,15 @@ export class HtmlRenderer extends Renderer {
         return output.join("");
     }
 
+    altLink(config: Config): string {
+        return `<a href="${ config.getPath("/single-page/") }">Single Page</a>`;
+    }
+
     renderHeader(page: Page, options: HeaderOptions): string {
         if (!options) { options = { }; }
 
         let header = PageHeader
-                     .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                     .replace(/(href|src|action)="(\/[^"]*)"/gi, (all, tag, path) => {
                          return `${ tag }="${ page.document.config.getPath(path) }"`;
                      })
                      .replace("PAGE_CLASS", "paged")
@@ -445,6 +457,7 @@ export class HtmlRenderer extends Renderer {
                      .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
                      .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
                      .replace("<!--SIDEBAR-->", this.renderSidebar(page))
+                     .replace("<!--ALTLINK-->", this.altLink(page.document.config))
 
         if (options.breadcrumbs) {
             const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
@@ -468,11 +481,14 @@ export class HtmlRenderer extends Renderer {
         if (options == null) { options = { }; }
 
         // Add the copyright to the footer
-        let footer = PageFooter
-                     .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
-                         return `${ tag }="${ page.document.config.getPath(path) }"`;
-                     })
-                     .replace("<!--COPYRIGHT-->", this.renderMarkdown(page.document.copyright));
+        let footer = PageFooter;
+        if (page.title === "Search") {
+            footer = footer.replace("<!--EXTRASCRIPT-->", SearchScript);
+        }
+        footer = footer.replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+            return `${ tag }="${ page.document.config.getPath(path) }"`;
+        }).replace("<!--COPYRIGHT-->", this.renderMarkdown(page.document.copyright));
+
 
         // Add the next and previous links to the footer
         const navItems = page.document.toc;
@@ -521,6 +537,7 @@ export class HtmlRenderer extends Renderer {
             "lato/Lato-BlackItalic.ttf",
             "lato/OFL.txt",
             "lato/README.txt",
+            "search.js",
             "script.js",
             "style.css"
         ].forEach((filename) => {
@@ -575,6 +592,10 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
             return `#${ url }-%23-${ fragment }`;
         }
         return `#${ url }`;
+    }
+
+    altLink(config: Config): string {
+        return `<a href="${ config.getPath("/") }">Split Pages</a>`;
     }
 
     renderFragment(fragment: Fragment): string {
@@ -660,14 +681,15 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
         }).join(`<div class="page-separator"></div>`);
 
         const header = PageHeader
-                       .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                       .replace(/(action|href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
                            return `${ tag }="${ document.config.getPath(path) }"`;
                        })
                        .replace("PAGE_CLASS", "single-page")
                        .replace("<!--TITLE-->", (document.config.title || "Documentation"))
                        .replace("<!--BANNER_TITLE-->", (document.config.title || "TITLE"))
                        .replace("<!--BANNER_SUBTITLE-->", (document.config.subtitle || "SUBTITLE"))
-                       .replace("<!--SIDEBAR-->", this._renderSidebar(document));
+                       .replace("<!--SIDEBAR-->", this._renderSidebar(document))
+                       .replace("<!--ALTLINK-->", this.altLink(document.config));
 
         const footer = PageFooter
                        .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {

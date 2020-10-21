@@ -503,6 +503,10 @@ export class Page {
 
     readonly modifiedDate: Date;
 
+    static searchPage(basepath: string): Page {
+        return new Page(resolve(basepath, "search"), [ new Fragment(FragmentType.SECTION, "Search", [ ]) ]);
+    }
+
     constructor(filename: string, fragments: Array<Fragment>, options?: { modifiedDate?: Date }) {
         this.filename = resolve(filename);
         this.fragments = Object.freeze(fragments);
@@ -834,8 +838,11 @@ export class Document {
             }, [ ]);
         }
 
+        const pages = readdir(path);
+        pages.push(Page.searchPage(resolve(path)));
+
 //        console.log("Processing Directroy:", resolve(path));
-        return new Document(resolve(path), readdir(path), config);
+        return new Document(resolve(path), pages, config);
     }
 }
 
