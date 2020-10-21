@@ -75,6 +75,7 @@ export declare class Page {
     readonly title: string;
     readonly sectionFragment: Fragment;
     readonly modifiedDate: Date;
+    static searchPage(basepath: string): Page;
     constructor(filename: string, fragments: Array<Fragment>, options?: {
         modifiedDate?: Date;
     });
