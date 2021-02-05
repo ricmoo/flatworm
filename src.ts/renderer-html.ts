@@ -220,6 +220,13 @@ export class HtmlRenderer extends Renderer {
         let pageCount = page.path.split("/").length;
         if (page.document.config.prefix) { pageCount--; }
 
+        const childCount = toc.reduce((accum, entry) => {
+            if (entry.path.substring(0, page.path.length) === page.path) {
+                accum++;
+            }
+            return accum;
+        }, 0);
+
         output.push(`<div class="link title"><a href="${ page.document.config.getPath("/") }">${ toc.shift().title }</a></div>`)
         toc.forEach((entry) => {
             let entryCount = entry.path.split("/").length;
@@ -231,11 +238,13 @@ export class HtmlRenderer extends Renderer {
             // Base node; always added
             if (entryCount === 3) { classes.push("base"); }
 
+            let myself = false;
             if (entry.path.substring(0, page.path.length) === page.path) {
                 if (entryCount === pageCount) {
                     // Myself
                     classes.push("myself");
                     classes.push("ancestor");
+                    myself = true;
                 } else if (entryCount === pageCount + 1) {
                     // Direct child
                     classes.push("child");
@@ -268,6 +277,25 @@ export class HtmlRenderer extends Renderer {
             classes.push("depth-" + entry.depth);
 
             output.push(`<div class="${ classes.join(" ") }"><a href="${ entry.path }">${ entry.title }</a></div>`);
+
+            // No children, include all headings on this page
+            if (myself && childCount === 1) {
+                const classes = [
+                    "link", "show", "child",
+                    `depth-${ entry.depth + 1 }`
+                ];
+                page.fragments.forEach((fragment) => {
+                    let title: string = null, path: string = null;
+                    //if (fragment.tag === FragmentType.SUBSECTION || fragment.tag === FragmentType.HEADING) {
+                    if (fragment.tag === FragmentType.SUBSECTION) {
+                        title = fragment.title.textContent.trim();
+                        path = "#" + (fragment.link || fragment.autoLink);
+                    } else {
+                        return;
+                    }
+                    output.push(`<div class="${ classes.join(" ") }"><a href="${ path }">${ title }</a></div>`);
+                });
+            }
         });
 
         return output.join("");
