@@ -16,6 +16,11 @@ const PageHeader = `<!DOCTYPE html>
   <head>
     <title><!--TITLE--></title>
     <link rel="stylesheet" type="text/css" href="/static/style.css">
+    <meta property="og:title" content="<!--TITLE-->"/>
+    <meta property="og:description" content="<!--DESCRIPTION-->"/>
+    <!--SOCIAL_IMAGE
+    <meta property="og:image" content="<!--SOCIAL_IMAGE-->"/>
+    SOCIAL_IMAGE-->
   </head>
   <body>
     <div class="sidebar">
@@ -453,11 +458,18 @@ export class HtmlRenderer extends Renderer {
                          return `${ tag }="${ page.document.config.getPath(path) }"`;
                      })
                      .replace("PAGE_CLASS", "paged")
-                     .replace("<!--TITLE-->", (page.title || "Documentation"))
+                     .replace(/<!--TITLE-->/g, (page.title || "Documentation"))
+                     .replace("<!--DESCRIPTION-->", (page.document.config.description || "Documentation"))
                      .replace("<!--BANNER_TITLE-->", (page.document.config.title || "TITLE"))
                      .replace("<!--BANNER_SUBTITLE-->", (page.document.config.subtitle || "SUBTITLE"))
                      .replace("<!--SIDEBAR-->", this.renderSidebar(page))
                      .replace("<!--ALTLINK-->", this.altLink(page.document.config))
+
+        if (page.document.config.socialImage) {
+            header = header.replace("<!--SOCIAL_IMAGE-->", page.document.config.getPath("/static/" + page.document.config.socialImage))
+                     .replace("<!--SOCIAL_IMAGE", "")
+                     .replace("SOCIAL_IMAGE-->", "");
+        }
 
         if (options.breadcrumbs) {
             const breadcrumbs = [ `<span class="current">${ page.title }</span>` ];
@@ -569,6 +581,14 @@ export class HtmlRenderer extends Renderer {
                 content: fs.readFileSync(resolve(__dirname, "../static/logo.svg"))
             });
         }
+
+        if (document.config.socialImage) {
+            files.push({
+                filename: (base + document.config.socialImage),
+                content: fs.readFileSync(resolve(document.basepath, document.config.socialImage))
+            });
+        }
+
         super.renderDocument(document).forEach((file) => {
             files.push(file);
         });
@@ -680,16 +700,23 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
             return Renderer.prototype.renderPage.call(this, page);
         }).join(`<div class="page-separator"></div>`);
 
-        const header = PageHeader
-                       .replace(/(action|href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
-                           return `${ tag }="${ document.config.getPath(path) }"`;
-                       })
-                       .replace("PAGE_CLASS", "single-page")
-                       .replace("<!--TITLE-->", (document.config.title || "Documentation"))
-                       .replace("<!--BANNER_TITLE-->", (document.config.title || "TITLE"))
-                       .replace("<!--BANNER_SUBTITLE-->", (document.config.subtitle || "SUBTITLE"))
-                       .replace("<!--SIDEBAR-->", this._renderSidebar(document))
-                       .replace("<!--ALTLINK-->", this.altLink(document.config));
+        let header = PageHeader
+                     .replace(/(action|href|src)="(\/[^"]*)"/gi, (all, tag, path) => {
+                         return `${ tag }="${ document.config.getPath(path) }"`;
+                     })
+                     .replace("PAGE_CLASS", "single-page")
+                     .replace(/<!--TITLE-->/g, (document.config.title || "Documentation"))
+                     .replace("<!--DESCRIPTION-->", (document.config.description || "Documentation"))
+                     .replace("<!--BANNER_TITLE-->", (document.config.title || "TITLE"))
+                     .replace("<!--BANNER_SUBTITLE-->", (document.config.subtitle || "SUBTITLE"))
+                     .replace("<!--SIDEBAR-->", this._renderSidebar(document))
+                     .replace("<!--ALTLINK-->", this.altLink(document.config));
+
+        if (document.config.socialImage) {
+            header = header.replace("<!--SOCIAL_IMAGE-->", document.config.getPath("/static/" + document.config.socialImage))
+                     .replace("<!--SOCIAL_IMAGE", "")
+                     .replace("SOCIAL_IMAGE-->", "");
+        }
 
         const footer = PageFooter
                        .replace(/(href|src)="(\/[^"]*)"/gi, (all, tag, path) => {

@@ -17,6 +17,9 @@ export class Config {
     readonly subtitle: string;
     readonly logo: string;
 
+    readonly description: string;
+    readonly socialImage: string;
+
     readonly prefix: string;
 
     // The link the documentations will be deployed to
@@ -59,8 +62,13 @@ export class Config {
         this.title = config.title || "Documentation";
         this.subtitle = config.subtitle || "";
         this.logo = config.logo || "";
+
+        this.description = config.description || "";
+        this.socialImage = config.socialImage || "";
+
         this.link = config.link || null;
         this.copyright = config.copyright || `Copyright &copy;${ (new Date()).getFullYear() }. All rights reserved`;
+
 
         this.prefix = config.prefix || null;
         if (this.prefix && !this.prefix.match(/^\/[a-z]+[a-z0-9_-]*$/i)) {
