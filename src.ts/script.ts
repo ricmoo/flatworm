@@ -4,30 +4,8 @@ import _module from "module";
 import { resolve } from "path";
 import vm from "vm";
 
-async function runContext(filename: string, context: any, code: string, needsAsync?: string): Promise<string> {
-    let promise = false;
-
-    if (needsAsync) {
-        code = `(async function() { ${ code }; return ${ needsAsync }; })()`;
-    }
-
-    const script = new vm.Script(code, { filename: filename });
-    let result = script.runInContext(context, { timeout: 5000 });
-    if (result && result.then) {
-        result = await result;
-        promise = true;
-    }
-    context._ = result;
-
-    if (needsAsync) {
-        promise = false;
-        context[needsAsync] = result;
-    }
-
-    result = (new vm.Script("_inspect(_)", { filename: filename })).runInContext(context);
-
-    if (promise) { result = `{ Promise: ${ result } }`; }
-    return result;
+function hasPrefix(text: string, prefix: string): boolean {
+    return (text.substring(0, prefix.length) === prefix);
 }
 
 export type Line = {
@@ -35,95 +13,198 @@ export type Line = {
     content: string
 };
 
+class EvalEmitter {
+    errorLineNo: number;
+    private lastLineNo: number;
+    private errorType: boolean;
+
+    readonly lines: ReadonlyArray<string>;
+
+    private readonly _output: Array<Line>;
+
+    readonly inspect: (value: any) => string;
+
+    constructor(code: string, inspect: (value: any) => string) {
+        this.inspect = inspect;
+
+        this.errorLineNo = 0;
+        this.lastLineNo = 0;
+        this.errorType = false;
+
+        this.lines = Object.freeze(code.split("\n"));
+
+        this._output = [ ];
+    }
+
+    _fill(lineNo: number): void {
+        this.lines.slice(this.lastLineNo, lineNo).map((content) => {
+            const classes = [ ];
+            if (hasPrefix(content.trim(), "/\/")) { classes.push("comment"); }
+            this._output.push({ content, classes });
+        });
+    }
+
+    emit(value: any, lineNo: number, errorType: boolean): void {
+        this._fill(lineNo)
+        this.lastLineNo = lineNo + 1;
+        const classes = [ "result", (errorType ? "error": "ok") ];
+        this.inspect(value).split("\n").forEach((line) => {
+            this._output.push({ content: `/\/ ${ line }`, classes: classes.slice() });
+        });
+    }
+
+    async flush(): Promise<Array<Line>> {
+        await (new Promise((resolve) => {
+            setTimeout(() => {
+                resolve(null);
+            }, 10);
+        }));
+        this._fill(undefined);
+        this.lastLineNo = this.lines.length;
+        return this.output;
+    }
+
+    get output(): Array<Line> {
+        if (this.lastLineNo !== this.lines.length) {
+            throw new Error("not fully executed");
+        }
+
+        const output = this._output.filter((line) => (!hasPrefix(line.content, "/\/_")));
+
+        while (output.length > 0 && output[0].content.trim() === "") {
+            output.splice(0, 1);
+        }
+
+        while (output.length > 0 && output[output.length - 1].content.trim() === "") {
+        console.log(output.length);
+            output.splice(output.length - 1, 1);
+        }
+
+        return output;
+    }
+
+    get annotatedCode(): string {
+        const lines = [ ];
+        lines.push("(async function() {");
+        lines.push("  let _ = undefined");
+
+        this.lines.forEach((line, lineNo) => {
+            if (hasPrefix(line, "/\/_hide:")) {
+                lines.push(" " + line.substring(8));
+
+            } else if (hasPrefix(line, "/\/_log:")) {
+                let output = line.substring(7);
+                if (output.trim() == "") { output = "_"; }
+
+                let cleanup = null;
+                if (this.errorType) {
+                    lines.push("    throw new Error('__FAILED_TO_THROW__');");
+                    lines.push("  } catch (_) {");
+                    lines.push(`    if (_.message === '__FAILED_TO_THROW__') { const e = new Error('Error block at line ${ lineNo } failed to throw as expected'); e._flatworm = true; throw e; }`);
+                    cleanup = "  }";
+                } else {
+                    cleanup = "  ;";
+                }
+
+                lines.push(`  _emitter.emit(${ output }, ${ lineNo }, ${ this.errorType });`)
+                if (cleanup) { lines.push(cleanup); }
+
+                this.errorType = false;
+
+            } else if (hasPrefix(line, "/\/_result:")) {
+                lines.push(`  ; _emitter.errorLineNo = ${ lineNo }; _ =`);
+                this.errorType = false;
+
+            } else if (hasPrefix(line, "/\/_throws:")) {
+                lines.push("  try {");
+                this.errorType = true;
+
+            } else if (hasPrefix(line, "/\/_")) {
+                throw new Error(`invalid flatworm eval operation: ${ line }`);
+
+            } else {
+                lines.push("  " + line);
+            }
+        });
+
+        lines.push("  return _emitter.flush(); /* return the result */");
+        lines.push("})()");
+        return lines.join("\n")
+    }
+}
+
 export class Script {
     readonly codeRoot: string;
     readonly contextify: (context: any) => void;
 
     readonly _require: (name: string) => any;
 
+    private _pageContext: Record<string, any>;
+
     constructor(codeRoot: string, contextify?: (context: any) => void) {
         this.codeRoot = codeRoot;
         this.contextify = contextify;
         this._require = _module.createRequireFromPath(resolve(codeRoot, "demo.js"))
+
+        this.resetPageContext();
+    }
+
+    resetPageContext(): void {
+        this._pageContext = { };
     }
 
     async run(filename: string, code: string): Promise<Array<Line>> {
+        console.log(filename);
+        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/api/providers/api-providers.wrm")) {
+        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/documentation")) {
+        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/getting")) {
+        if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/getting-started.wrm/script.js#Connecting-to-the-DAI-Contract")) {
+            return [ ];
+        }
+        if (code.indexOf("/\/!") >= 0) { throw new Error(filename); }
         filename = resolve(filename);
 
-        const lines = code.split("\n");
-
-        const contextObject = {
-            _inspect: function(result: any) { return JSON.stringify(result); },
+        const contextObject: Record<string, any> = {
+            _inspect: function(result: any) {
+                if (result instanceof Error) {
+                    return `Error: ${ result.message }`;
+                }
+                return JSON.stringify(result);
+            },
             console: console,
-            require: this._require
+            require: this._require,
+            _page: this._pageContext,
         };
 
         const context = vm.createContext(contextObject);
         if (this.contextify) { this.contextify(contextObject); }
 
-        const output: Array<Line> = [ ];
-        let script: Array<string> = [ ];
-        let showing = true;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+        const _emitter = new EvalEmitter(code, contextObject._inspect);
+        contextObject._emitter = _emitter;
 
-            let stripped = line.replace(/\s/, "");
-            if (stripped.indexOf("//<hide>") === 0) {
-                showing = false;
-                continue;
-            } else if (stripped.indexOf("//</hide>") === 0) {
-                showing = true;
-                continue;
+        const compiled = _emitter.annotatedCode;
+
+        // Debug; dump generated code
+        compiled.split("\n").forEach((line, index) => {
+            console.log(`${ index }: ${ line }`);
+        });
+
+        const script = new vm.Script(compiled, {
+            filename: (filename || "demo.js")
+        });
+
+        try {
+            return await script.runInContext(context, { });
+        } catch (e) {
+            if (e._flatworm) {
+                delete e._flatworm;
+                throw e;
             }
 
-            if (line.trim().substring(0, 3) === "//!") {
-                let padding = line.substring(0, line.indexOf("/"));
-                try {
-                    const needsAsync = line.match(/^\s*\/\/!\s*async\s+(.*)$/);
-                    const result = await runContext(filename, context, script.join("\n"), (needsAsync ? needsAsync[1]: null));
-                    if (showing) {
-                        result.split("\n").forEach((line) => {
-                            output.push({ classes: [ "result", "ok" ], content: `${ padding }// ${ line }` });
-                        });
-                    }
-                    if (line.replace(/\s/g, "") === "/\/!error") { throw new Error("expected an Error"); }
-                } catch (error) {
-                    if (line.replace(/\s/g, "") !== "/\/!error") { throw error; }
-                    if (showing) {
-                        output.push({ classes: [ "result", "error" ], content: `${ padding }// Error: ${ error.message }` });
-                    }
-                }
-                script = [ ];
-            } else {
-                script.push(line);
-
-                if (showing) {
-                    let classes = [ ];
-                    if (line.replace(/\s/g, "").match(/^\/\/[^<]/)) {
-                        classes.push("comment");
-                    }
-                    output.push({ classes: classes, content: line });
-                }
-            }
+            const error: any = new Error(`Result block at line ${ _emitter.errorLineNo + 1} threw ${ JSON.stringify(e.message) }`);
+            error.error = e;
+            throw error;
         }
-
-        if (lines.length) {
-            await runContext(filename, context, script.join("\n"));
-        }
-
-        // Trim off leading empty lines
-        while (output.length) {
-            if (output[0].content.trim() !== "") { break; }
-            output.splice(0, 1);
-        }
-
-        // Trim off trailing empty lines
-        while (output.length) {
-            if (output[output.length - 1].content.trim() !== "") { break; }
-            output.splice(output.length - 1, 1);
-        }
-
-        return output;
     }
 }
 

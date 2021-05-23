@@ -1,6 +1,6 @@
 {
   "name": "flatworm",
-  "version": "0.0.2-beta.5",
+  "version": "0.0.2-beta.6",
   "description": "A very simple documentation generation tool.",
   "main": "./lib/index.js",
   "bin": {

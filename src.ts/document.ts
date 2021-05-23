@@ -1,7 +1,7 @@
 "use strict";
 
 import fs from "fs";
-import { basename, dirname, extname, resolve } from "path";
+import { basename, dirname, extname, join, resolve } from "path";
 
 import type { Config } from "./config";
 import type { Line, Script } from "./script";
@@ -255,7 +255,20 @@ export class CodeFragment extends Fragment {
         }
 
         if (this.language === "javascript") {
-           this.#code = Object.freeze(await script.run("script.js", this.source));
+           try {
+               let scriptName = join(this.page.filename, "script.js");
+               if (this.heading.trim()) {
+                   let fragment = this.title.textContent;
+                   fragment = fragment.replace(/[^a-z0-9]/ig, "-");
+                   fragment = fragment.replace(/-+/g, "-");
+                   fragment = fragment.replace(/(^-+)|(-+$)/g, "");
+                   scriptName += "#" + fragment;
+               }
+               this.#code = Object.freeze(await script.run(scriptName, this.source));
+           } catch (error) {
+               console.log(this, error);
+               throw error;
+           }
         } else if (this.language === "script") {
             this.#code = Object.freeze(this.source.split("\n").map((line) => {
                 let classes = [ ];
@@ -796,6 +809,7 @@ export class Document {
 
     async evaluate(script: Script): Promise<void> {
         for (let p = 0; p < this.pages.length; p++) {
+            script.resetPageContext();
             const page = this.pages[p];
             for (let f = 0; f < page.fragments.length; f++) {
                 const fragment = page.fragments[f];
