@@ -17,6 +17,7 @@ class EvalEmitter {
     errorLineNo: number;
     private lastLineNo: number;
     private errorType: boolean;
+    private inBlock: boolean;
 
     readonly lines: ReadonlyArray<string>;
 
@@ -30,6 +31,7 @@ class EvalEmitter {
         this.errorLineNo = 0;
         this.lastLineNo = 0;
         this.errorType = false;
+        this.inBlock = false;
 
         this.lines = Object.freeze(code.split("\n"));
 
@@ -76,7 +78,6 @@ class EvalEmitter {
         }
 
         while (output.length > 0 && output[output.length - 1].content.trim() === "") {
-        console.log(output.length);
             output.splice(output.length - 1, 1);
         }
 
@@ -92,8 +93,8 @@ class EvalEmitter {
             if (hasPrefix(line, "/\/_hide:")) {
                 lines.push(" " + line.substring(8));
 
-            } else if (hasPrefix(line, "/\/_log:")) {
-                let output = line.substring(7);
+            } else if (hasPrefix(line, "/\/_log:") || hasPrefix(line, "/\/_null:")) {
+                let output = line.substring(line.indexOf(":") + 1);
                 if (output.trim() == "") { output = "_"; }
 
                 let cleanup = null;
@@ -106,18 +107,29 @@ class EvalEmitter {
                     cleanup = "  ;";
                 }
 
-                lines.push(`  _emitter.emit(${ output }, ${ lineNo }, ${ this.errorType });`)
+                if (hasPrefix(line, "/\/_log:")) {
+                    lines.push(`  _emitter.emit(${ output }, ${ lineNo }, ${ this.errorType });`)
+                }
                 if (cleanup) { lines.push(cleanup); }
 
                 this.errorType = false;
+                this.inBlock = false;
 
             } else if (hasPrefix(line, "/\/_result:")) {
+                if (this.inBlock) {
+                    throw new Error(`nesting _result: in a ${ this.errorType ? "_throws:": "_result:" } not allowed`);
+                }
                 lines.push(`  ; _emitter.errorLineNo = ${ lineNo }; _ =`);
                 this.errorType = false;
+                this.inBlock = true;
 
             } else if (hasPrefix(line, "/\/_throws:")) {
+                if (this.inBlock) {
+                    throw new Error(`nesting _throws: in a ${ this.errorType ? "_throws:": "_result:" } not allowed`);
+                }
                 lines.push("  try {");
                 this.errorType = true;
+                this.inBlock = true;
 
             } else if (hasPrefix(line, "/\/_")) {
                 throw new Error(`invalid flatworm eval operation: ${ line }`);
@@ -154,14 +166,6 @@ export class Script {
     }
 
     async run(filename: string, code: string): Promise<Array<Line>> {
-        console.log(filename);
-        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/api/providers/api-providers.wrm")) {
-        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/documentation")) {
-        //if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/getting")) {
-        if (!hasPrefix(filename, "/Users/dev/Development/ethers/ethers.js/docs.wrm/getting-started.wrm/script.js#Connecting-to-the-DAI-Contract")) {
-            return [ ];
-        }
-        if (code.indexOf("/\/!") >= 0) { throw new Error(filename); }
         filename = resolve(filename);
 
         const contextObject: Record<string, any> = {
@@ -185,9 +189,9 @@ export class Script {
         const compiled = _emitter.annotatedCode;
 
         // Debug; dump generated code
-        compiled.split("\n").forEach((line, index) => {
-            console.log(`${ index }: ${ line }`);
-        });
+        //compiled.split("\n").forEach((line, index) => {
+        //    console.log(`${ index }: ${ line }`);
+        //});
 
         const script = new vm.Script(compiled, {
             filename: (filename || "demo.js")
