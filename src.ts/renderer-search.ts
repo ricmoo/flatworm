@@ -20,6 +20,7 @@ export class SearchRenderer extends Renderer {
     renderDocument(document: Document): Array<File> {
         const summaries: Array<Summary> = [ ];
         const indices: { [ keyword: string ]: Array<string> } = { };
+        const compound: Record<string, boolean> = { };
 
         let section: string = null
         let subsection: string = null;
@@ -58,10 +59,13 @@ export class SearchRenderer extends Renderer {
 
                             // Get each component of a camel case word
                             const camelCases = word.split(/(^[a-z]|[A-Z])/);
-                            if (camelCases.length > 3) {
+                            if (camelCases.length > 3 && word.toUpperCase() !== word) {
                                 for (let i = 1; i < camelCases.length; i += 2) {
                                     const word = (camelCases[i] + camelCases[i + 1]).toLowerCase();
                                     if (titleWords.indexOf(word) === -1) { titleWords.push(word); }
+                                }
+                                if (fragment.tag !== FragmentType.CODE) {
+                                    compound[word] = true;
                                 }
                             }
 
@@ -132,6 +136,7 @@ export class SearchRenderer extends Renderer {
         const search = {
             version: "0.1",
             summaries: summaries,
+            compound: Object.keys(compound).sort(),
             indices: indices
         };
 
