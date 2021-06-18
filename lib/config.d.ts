@@ -9,6 +9,8 @@ export declare class Config {
     readonly title: string;
     readonly subtitle: string;
     readonly logo: string;
+    readonly description: string;
+    readonly socialImage: string;
     readonly prefix: string;
     readonly link: string;
     readonly copyright: string;

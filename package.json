@@ -10,6 +10,7 @@
     "lib": "lib",
     "test": "test"
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^13.11.1",
     "typescript": "^3.8.3"
@@ -28,6 +29,5 @@
     "url": "git://github.com/ricmoo/flatworm.git"
   },
   "author": "Richard Moore <me@ricmoo.com>",
-  "license": "MIT",
-  "dependencies": {}
+  "license": "MIT"
 }
