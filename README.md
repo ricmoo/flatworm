@@ -8,6 +8,13 @@ JavaScript libraries.
 A lot of its inspiration came from [Read the Docs](https://github.com/readthedocs/sphinx_rtd_theme) and
 the [Sphinx](https://www.sphinx-doc.org/) project.
 
+**Features**
+
+- Simple
+- HTML and Markdown output (PDF coming)
+- JavaScript evaluation for reliable and correct code samples
+- Full-text search
+- Configuarable source links
 
 Fragments
 ---------
