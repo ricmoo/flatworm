@@ -210,5 +210,33 @@ export class Script {
             throw error;
         }
     }
+
+    async _runMethod(name: string): Promise<void> {
+        const contextObject: Record<string, any> = {
+            _inspect: function(result: any) {
+                if (result instanceof Error) {
+                    return `Error: ${ result.message }`;
+                }
+                return JSON.stringify(result);
+            },
+            console: console,
+            require: this._require,
+            _page: { }
+        };
+
+        if (this.contextify) { this.contextify(contextObject); }
+
+        const method: any = contextObject[name];
+
+        if (typeof(method) === "function") { await method(); }
+    }
+
+    async startup(): Promise<void> {
+        await this._runMethod("_startup");
+    }
+
+    async shutdown(): Promise<void> {
+        await this._runMethod("_shutdown");
+    }
 }
 

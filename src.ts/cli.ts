@@ -84,8 +84,10 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
 
         if (opts.flags.version) {
             console.log("flatworm/" + version);
+
         } else if (opts.flags.help) {
             showUsage();
+
         } else {
             if (opts.args.length !== 2) {
                 throw new Error("Requires exactly SRC_FOLDER DST_FOLDER");
@@ -98,7 +100,12 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
 
             if (!opts.flags.skipeval) {
                 const script = new Script(config.codeRoot ? resolve(src, config.codeRoot): src, config.codeContextify || null);
+
+                await script.startup();
+
                 await document.evaluate(script);
+
+                await script.shutdown();
             }
 
             const renderers = [
@@ -118,7 +125,6 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
                     console.log(filename);
                 });
             });
-
         }
     } catch (error) {
         showUsage();
