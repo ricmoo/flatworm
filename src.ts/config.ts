@@ -1,7 +1,7 @@
 "use strict";
 
 import fs from "fs";
-const { createRequireFromPath } = require('module')
+const { createRequire } = require('module')
 import { dirname, resolve } from "path";
 const vm = require("vm");
 
@@ -153,7 +153,7 @@ export class Config {
             __filename: path,
             module: injected,
             exports: injected.exports,
-            require: createRequireFromPath(path)
+            require: createRequire(path)
         });
 
         const script = new vm.Script(fs.readFileSync(path).toString(), { filename: "config.js" });
