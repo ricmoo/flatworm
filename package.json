@@ -10,15 +10,15 @@
     "lib": "lib",
     "test": "test"
   },
-  "dependencies": {},
   "devDependencies": {
-    "@types/node": "^13.11.1",
+    "@types/node": "^13.13.52",
     "typescript": "^3.8.3"
   },
   "scripts": {
     "auto-build": "npm run build -- -w",
     "build": "tsc --build ./tsconfig.json",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build-docs": "node lib/cli.js docs.wrm/ docs/"
   },
   "keywords": [
     "documentation",
