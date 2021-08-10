@@ -16,7 +16,7 @@ export type Line = {
 class EvalEmitter {
     errorLineNo: number;
     private lastLineNo: number;
-    private errorType: boolean;
+    private errorType: string;
     private inBlock: boolean;
 
     readonly lines: ReadonlyArray<string>;
@@ -30,7 +30,7 @@ class EvalEmitter {
 
         this.errorLineNo = 0;
         this.lastLineNo = 0;
-        this.errorType = false;
+        this.errorType = "ok";
         this.inBlock = false;
 
         this.lines = Object.freeze(code.split("\n"));
@@ -46,13 +46,17 @@ class EvalEmitter {
         });
     }
 
-    emit(value: any, lineNo: number, errorType: boolean): void {
+    emit(value: any, lineNo: number, type: string): void {
         this._fill(lineNo)
         this.lastLineNo = lineNo + 1;
-        const classes = [ "result", (errorType ? "error": "ok") ];
-        this.inspect(value).split("\n").forEach((line) => {
-            this._output.push({ content: `/\/ ${ line }`, classes: classes.slice() });
-        });
+        if (type === "verbatim") {
+            this._output.push({ content: value, classes: [ ] });
+        } else {
+            const classes = [ "result", type ];
+            this.inspect(value).split("\n").forEach((line) => {
+                this._output.push({ content: `/\/ ${ line }`, classes: classes.slice() });
+            });
+        }
     }
 
     async flush(): Promise<Array<Line>> {
@@ -93,12 +97,16 @@ class EvalEmitter {
             if (hasPrefix(line, "/\/_hide:")) {
                 lines.push(" " + line.substring(8));
 
+            } else if (hasPrefix(line, "/\/_verbatim:")) {
+                let output = line.substring(line.indexOf(":") + 1);
+                lines.push(`  _emitter.emit(${ output }, ${ lineNo }, "verbatim");`)
+
             } else if (hasPrefix(line, "/\/_log:") || hasPrefix(line, "/\/_null:")) {
                 let output = line.substring(line.indexOf(":") + 1);
                 if (output.trim() == "") { output = "_"; }
 
                 let cleanup = null;
-                if (this.errorType) {
+                if (this.errorType === "error") {
                     lines.push("    throw new Error('__FAILED_TO_THROW__');");
                     lines.push("  } catch (_) {");
                     lines.push(`    if (_.message === '__FAILED_TO_THROW__') { const e = new Error('Error block at line ${ lineNo } failed to throw as expected'); e._flatworm = true; throw e; }`);
@@ -108,27 +116,27 @@ class EvalEmitter {
                 }
 
                 if (hasPrefix(line, "/\/_log:")) {
-                    lines.push(`  _emitter.emit(${ output }, ${ lineNo }, ${ this.errorType });`)
+                    lines.push(`  _emitter.emit(${ output }, ${ lineNo }, ${ JSON.stringify(this.errorType) });`)
                 }
                 if (cleanup) { lines.push(cleanup); }
 
-                this.errorType = false;
+                this.errorType = "ok";
                 this.inBlock = false;
 
             } else if (hasPrefix(line, "/\/_result:")) {
                 if (this.inBlock) {
-                    throw new Error(`nesting _result: in a ${ this.errorType ? "_throws:": "_result:" } not allowed`);
+                    throw new Error(`nesting _result: in a ${ (this.errorType === "error") ? "_throws:": "_result:" } not allowed`);
                 }
                 lines.push(`  ; _emitter.errorLineNo = ${ lineNo }; _ =`);
-                this.errorType = false;
+                this.errorType = "ok";
                 this.inBlock = true;
 
             } else if (hasPrefix(line, "/\/_throws:")) {
                 if (this.inBlock) {
-                    throw new Error(`nesting _throws: in a ${ this.errorType ? "_throws:": "_result:" } not allowed`);
+                    throw new Error(`nesting _throws: in a ${ (this.errorType === "error") ? "_throws:": "_result:" } not allowed`);
                 }
                 lines.push("  try {");
-                this.errorType = true;
+                this.errorType = "error";
                 this.inBlock = true;
 
             } else if (hasPrefix(line, "/\/_")) {
