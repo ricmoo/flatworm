@@ -164,7 +164,7 @@ export class Script {
     constructor(codeRoot: string, contextify?: (context: any) => void) {
         this.codeRoot = codeRoot;
         this.contextify = contextify;
-        this._require = _module.createRequireFromPath(resolve(codeRoot, "demo.js"))
+        this._require = _module.createRequire(resolve(codeRoot, "demo.js"))
 
         this.resetPageContext();
     }
