@@ -1,7 +1,8 @@
 {
   "name": "flatworm",
-  "version": "0.0.2-beta.7",
+  "version": "0.0.2-beta.8",
   "description": "A very simple documentation generation tool.",
+  "engines" : { "node" : ">=12.17.0" },
   "main": "./lib/index.js",
   "bin": {
     "flatworm": "./lib/cli.js"
@@ -12,8 +13,8 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@types/node": "^13.11.1",
-    "typescript": "^3.8.3"
+    "@types/node": "^16.11.17",
+    "typescript": "^4.5.4"
   },
   "scripts": {
     "auto-build": "npm run build -- -w",
