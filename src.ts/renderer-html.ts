@@ -16,6 +16,7 @@ const PageHeader = `<!DOCTYPE html>
   <head>
     <title><!--TITLE--></title>
     <link rel="stylesheet" type="text/css" href="/static/style.css">
+    <meta charset="UTF-8"> 
     <meta property="og:title" content="<!--TITLE-->"/>
     <meta property="og:description" content="<!--DESCRIPTION-->"/>
     <!--SOCIAL_IMAGE
