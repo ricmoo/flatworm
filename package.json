@@ -1,33 +1,35 @@
 {
-  "name": "flatworm",
-  "version": "0.0.2-beta.7",
-  "description": "A very simple documentation generation tool.",
-  "main": "./lib/index.js",
+  "author": "Richard Moore <me@ricmoo.com>",
   "bin": {
     "flatworm": "./lib/cli.js"
+  },
+  "dependencies": {},
+  "description": "A very simple documentation generation tool.",
+  "devDependencies": {
+    "@types/node": "^13.11.1",
+    "typescript": "^3.8.3"
   },
   "directories": {
     "lib": "lib",
     "test": "test"
   },
-  "dependencies": {},
-  "devDependencies": {
-    "@types/node": "^13.11.1",
-    "typescript": "^3.8.3"
+  "gitHead": "ac5d2ec13cc33bc9066e40c6f91756159e908e8b",
+  "keywords": [
+    "documentation",
+    "docs"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "name": "flatworm",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ricmoo/flatworm.git"
   },
   "scripts": {
     "auto-build": "npm run build -- -w",
     "build": "tsc --build ./tsconfig.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [
-    "documentation",
-    "docs"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/ricmoo/flatworm.git"
-  },
-  "author": "Richard Moore <me@ricmoo.com>",
-  "license": "MIT"
+  "tarballHash": "0xe06df790c36c42337c0cf566b2dd63477f6da04ceaea2eccd7b697924ff5f86b",
+  "version": "0.0.2-beta.7"
 }
