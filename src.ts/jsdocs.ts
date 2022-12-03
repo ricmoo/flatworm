@@ -1541,6 +1541,6 @@ console.log("EXP", allExports);
 */
 }
 
-const api = new API("./test.ts");
-api.dump();
+//const api = new API("./test.ts");
+//api.dump();
 //console.log(api.getExport("FOO"));
