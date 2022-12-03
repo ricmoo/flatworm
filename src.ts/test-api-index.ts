@@ -1,6 +1,8 @@
 import fs from "fs";
 import { dirname, join, resolve } from "path";
 
+import { Config } from "./config2.js";
+
 import {
     ElementNode, LinkNode, ListNode, Node, TextNode,
     parseMarkdown
@@ -279,9 +281,7 @@ function htmlify(value: string): string {
     return value.replace(/&/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 */
-const path = resolve(process.argv[2]);
-const api = new API(path);
-{
+export function generateIndex(api: API) {
     const index = getIndex(api);
     ///console.log("=====================");
     const output: Array<string> = [ ];
@@ -466,8 +466,8 @@ function addReturnsExport(output: Array<string>, links: LinkMap, obj: ReturnsExp
     output.push(`<div class="docs">${ renderDocs(obj.flatworm, links) }</div>`);
     output.push(`</div>`);
 }
-
-function addObjectExport(output: Array<string>, _links: LinkMap, obj: ObjectExport): TocEntry {
+// @TODO: remove API since supers exists on obj
+function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: ObjectExport): TocEntry {
     const name = obj.name;
     const toc: TocEntry = { link: `#${ name }`, title: name, style: "code" };
 
@@ -613,7 +613,8 @@ export type TocEntry = {
     title: string;
 };
 
-function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | Subsection>): Array<TocEntry> {
+// @TODO: remove api; supers is on obj
+function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | Subsection>): Array<TocEntry> {
     const toc = [ ];
 
     // Show all types
@@ -651,7 +652,7 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
     // Show all Classes and Interfaces
     for (const obj of objs) {
         if (obj instanceof ObjectExport) {
-            toc.push(addObjectExport(output, links, obj));
+            toc.push(addObjectExport(api, output, links, obj));
         } else if (!(obj instanceof Export)) {
             output.push(`<div class="subsection-info show-links">`);
             if (obj.anchor) {
@@ -663,7 +664,7 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
             output.push(`<div class="docs">${ renderDocs(obj.flatworm, links) }</div>`);
             output.push(`</div>`);
             output.push(`<div class="subsection">`);
-            addExports(output, links, obj.objs);
+            addExports(api, output, links, obj.objs);
             output.push(`</div>`);
         }
     }
@@ -671,30 +672,12 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
     return toc;
 }
 
-{
+export async function generate(api: API, config: Config) {
 //    const BASE_URL = "http://localhost:8080/lcov-report/ethers-v6/src.ts/{FILENAME}.html#L{LINENO}";
-    const BASE_URL = "https:/\/github.com/ethers-io/ethers.js/blob/v6-beta-exports/src.ts/{FILENAME}#L{LINENO}"
+//    const BASE_URL = "https:/\/github.com/ethers-io/ethers.js/blob/v6-beta-exports/src.ts/{FILENAME}#L{LINENO}"
+    const BASE_URL = config.srcBaseUrl;
 
     const toc = api.toc;
-    /*
-    if (0) {
-        const links: LinkMap = new Map();
-        for (const obj of api.objs) {
-            if (links.has(obj.name)) {
-                throw new Error(`duplicate label: ${ obj.name}`);
-            }
-            links.set(obj.name, obj.name);
-        }
-
-        const output: Array<string> = [ ];
-        addHeader(output, links, "some title", "some body");
-
-        addExports(output, links, api.objs);
-
-        addFooter(output);
-        fs.writeFileSync("test-all.html", output.join(""));
-    }
-    */
 
 // @TODO: use obj.id
     const links: LinkMap = new Map();
@@ -873,7 +856,7 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
         const output: Array<string> = [ ];
         addHeader(output, links, mainToc.map(e => e.entry), section);
 
-        const localToc = addExports([ ], links, section.objs);
+        const localToc = addExports(api, [ ], links, section.objs);
 
         output.push(`<ul class="toc">`)
         for (const entry of localToc) {
@@ -881,7 +864,7 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
         }
         output.push(`</ul>`)
 
-        addExports(output, links, section.objs);
+        addExports(api, output, links, section.objs);
 
         let previousEntry: null | TocEntry = null;
         let nextEntry: null | TocEntry = null;
@@ -893,7 +876,6 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
             const { entry, section } = mainToc[i + 1];
             nextEntry = { link: entry.link, title: section.title, style: "normal" };
         }
-        console.log("MOO", path, previousEntry, nextEntry);
         addFooter(output, previousEntry, nextEntry);
 
         const filename = resolve("output/docs", path, "index.html");
@@ -902,3 +884,11 @@ function addExports(output: Array<string>, links: LinkMap, objs: Array<Export | 
     }
 
 }
+
+(async function() {
+    const path = resolve(process.argv[2]);
+    const config = await Config.fromScript(path);
+    const api = new API(config.codeRoot);
+    console.log(api);
+    generate(api, config);
+})();

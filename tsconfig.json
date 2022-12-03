@@ -17,6 +17,8 @@
 
     "forceConsistentCasingInFileNames": true,
 
+    "sourceMap": true,
+
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
