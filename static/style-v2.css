@@ -1,0 +1,513 @@
+@font-face {
+    font-family: 'LatoLight';
+    src: url('/static/lato/Lato-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'LatoLight';
+    src: url('/static/lato/Lato-Black.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'LatoLight';
+    src: url('/static/lato/Lato-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'LatoLight';
+    src: url('/static/lato/Lato-BlackItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+}
+
+html {
+  color: #333;
+  font-family: "LatoLight", sans-serif;
+  font-size: 16px;
+  margin: 0;
+}
+
+body {
+  margin: 0;
+  color: #333;
+}
+
+.clearfix {
+  clear: both;
+}
+
+.sidebar {
+  background: #334;
+  box-shadow: 5px 0px 10px 0 #aaa;
+  font-size: 16px;
+  overflow: auto;
+  padding-top: 200px;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 260px;
+}
+
+.sidebar .header {
+  background: #2535a0;
+  box-shadow: 0px 5px 15px 0px #115;
+  color: #fff;
+  height: 180px;
+  left: 0;
+  text-align: center;
+  top: 0;
+  position: fixed;
+  width: 260px;
+}
+
+.sidebar .header .logo {
+  margin-top: 30px;
+}
+
+.sidebar a {
+  text-decoration: none;
+}
+
+.sidebar .header a.logo {
+  color: #fff;
+  display: inline-block;
+  opacity: 0.5;
+  padding: 10px 20px;
+  transition: opacity 0.2s linear;
+}
+
+.sidebar .header a.logo:hover {
+  opacity: 1;
+}
+
+.sidebar .header .logo .image {
+  background: url(https://docs.ethers.io/v5/static/logo.svg) center no-repeat;
+  height: 40px;
+  width: 100%;
+}
+
+.sidebar .header .logo .name {
+  font-size: 125%;
+  font-weight: bold;
+}
+
+.sidebar .toc {
+  font-size: 15px;
+  padding-left: 20px;
+}
+
+.sidebar .toc div.title {
+  margin: 15px 0;
+}
+
+.sidebar .toc div.title a {
+  color: #666;
+  font-size: 110%;
+  font-weight: bold;
+}
+
+.sidebar .toc div.title a:hover {
+  color: #779;
+}
+
+.sidebar .toc div {
+  margin: 10px 0;
+  white-space: nowrap;
+}
+
+.sidebar .toc div.depth-1 {
+  padding-left: 10px;
+}
+
+.sidebar .toc div.depth-2 {
+  padding-left: 20px;
+}
+
+.sidebar .toc div.depth-3 {
+  padding-left: 30px;
+}
+
+.sidebar .toc div a {
+  color: #fff;
+}
+
+.sidebar .toc div a:hover {
+  color: #aac;
+}
+
+.content {
+  padding: 40px 0 50px;
+  margin-left: 310px;
+  width: 760px;
+}
+
+.footer {
+  margin: 40px 0 0;
+}
+
+.footer .nav {
+  border-bottom: 1px solid #888;
+  border-top: 1px solid #888;
+  padding: 15px 0;
+  position: relative;
+}
+
+.footer .nav .previous {
+  display: inline-block;
+  float: left;
+}
+
+.footer .nav .next {
+  display: inline-block;
+  float: right;
+}
+
+.footer .nav .arrow {
+  background: #449;
+  border-radius: 17px;
+  color: #fff;
+  display: inline-block;
+  font-weight: bold;
+  height: 34px;
+  line-height: 34px;
+  opacity: 0.7;
+  text-align: center;
+  transition: opacity 0.2s linear;
+  width: 34px;
+}
+
+.footer .nav a:hover {
+  color: #000;
+}
+
+.footer .nav a:hover .arrow {
+  opacity: 1;
+}
+
+.footer .nav .previous .arrow {
+    margin-right: 15px;
+}
+
+.footer .nav .next .arrow {
+    margin-left: 15px;
+}
+
+.footer .copyright {
+  font-size: 85%;
+  text-align: center;
+  padding-top: 25px;
+}
+
+.content .section-title {
+  border-top: 2px solid #888;
+  color: #000;
+  font-size: 175%;
+  font-weight: bold;
+  margin: 30px 0 20px;
+  padding: 30px 0 0 0;
+  position: relative;
+}
+
+.content .title {
+  border-top: 3px solid #888;
+  color: #444;
+  font-size: 150%;
+  font-weight: bold;
+  margin: 20px 0 10px;
+  padding: 20px 0 0 0;
+  position: relative;
+}
+
+.content .subsection .title {
+  border-top: 1px solid #aaa;
+}
+
+.content .title .type {
+  opacity: 0.5;
+}
+
+/* Use header style */
+/*
+.subsection .title {
+  border-bottom: 1px solid #ccc;
+  border-top: none;
+  color: #444;
+  font-size: 90%;
+  font-weight: bold;
+  margin: 30px 0 16px;
+  padding: 0 0 7px 0;
+}
+*/
+.supers {
+  color: #777;
+  font-style: italic;
+  font-size: 16px;
+  padding-left: 50px;
+  margin: 10px 0 10px;
+  text-indent: -50px;
+}
+
+.super {
+  font-family: monospace;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+.category {
+  color: #fff;
+  font-family: monospace;
+  margin-left: 15px;
+  padding-left: 5px;
+  padding-right: 5px;
+  font-size: 12px;
+  vertical-align: top;
+}
+
+.category.readonly {
+  background: #336;
+  border: 1px solid #008;
+}
+
+.category.abstract {
+  background: #366;
+  border: 1px solid #088;
+}
+
+.content .header {
+  border-bottom: 1px solid #ccc;
+  color: #444;
+  font-size: 90%;
+  font-weight: bold;
+  margin: 30px 0 16px;
+  padding-bottom: 7px;
+}
+
+.signature {
+  padding-left: 50px;
+  text-indent: -50px;
+  margin: 20px 0 10px;
+  position: relative;
+}
+
+.signature .parent {
+  color: #777;
+  font-style: italic;
+}
+
+.signature .name {
+  font-weight: bold;
+}
+
+.signature .param {
+  font-style: italic;
+  font-family: monospace;
+  ddd-white-space: nowrap;
+}
+
+.signature .returns {
+  font-style: italic;
+  font-family: monospace;
+  ddd-white-space: nowrap;
+}
+
+.symbol.open-paren {
+  margin-left: 4px;
+  margin-right: 7px;
+}
+
+.symbol.close-paren {
+  margin-left: 7px;
+  margin-right: 4px;
+}
+
+.symbol.comma {
+  margin-right: 8px;
+}
+
+.symbol.dot {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+.symbol.arrow {
+  dddfont-weight: bold;
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.docs {
+  margin: 10px 0 30px;
+}
+
+.docs a {
+  font-weight: bold;
+}
+
+.prop-info .docs {
+  padding: 0px 0 0 30px;
+}
+
+p:first-child {
+  margin-top: 0;
+}
+
+p:last-child {
+  margin-top: 0;
+}
+
+p {
+  margin: 14px 0;
+}
+
+.content .toc {
+  line-height: 25px;
+}
+
+.content .toc .style-normal {
+}
+
+.content .toc .style-code {
+  font-family: monospace;
+  font-size: 115%;
+}
+
+.content .toc .style-italic {
+  font-style: italic;
+}
+
+.docs .style-bold {
+  font-weight: bold;
+}
+
+.docs .style-code {
+  color: #a44;
+  font-family: monospace;
+  padding-left: 3px;
+}
+
+.docs .style-italic {
+  font-style: italic;
+}
+
+.signature .param-name {
+  color: #c4c;
+}
+
+.docs .style-param {
+  dddbackground: #eef;
+  dddborder: 1px solid #cce;
+  dddborder-bottom: 2px dashed #aaf;
+  color: #c4c;
+  font-family: monospace;
+  padding-left: 4px;
+  padding-right: 4px;
+  letter-spacing: 0.1ex;
+}
+
+.docs .style-underline {
+  text-decoration: underline;
+}
+
+a.link {
+  transition: opacity 0.3s linear;
+  position: absolute;
+  vertical-align: middle;
+}
+
+a.link.anchor {
+  background: url(./static/link.svg) left no-repeat;
+  display: inline-block;
+  opacity: 0.0;
+  transform: translate(-100%, 15%);
+}
+
+a.link.source {
+  opacity: 0.1;
+}
+
+.section-title a.link.anchor {
+  height: 27px;
+  width: 35px;
+}
+
+.title a.link.anchor {
+  height: 24px;
+  width: 35px;
+}
+
+.header a.link.anchor {
+  height: 16px;
+  width: 24px;
+}
+
+.signature a.link.anchor {
+  height: 16px;
+  width: 24px;
+}
+
+.show-links:hover a.link {
+  opacity: 0.4;
+}
+
+a.link.source {
+  ddd-font-size: 18px;
+  font-family: monospace;
+  font-weight: bold;
+  right: 0px;
+  padding-left: 15px;
+  transform: translateX(100%);
+  text-align: right;
+  text-indent: 0;
+}
+
+.content a {
+  background-color: #fff;
+  color: #44e;
+  outline: none;
+  text-decoration: none;
+}
+
+.content a.link-lit:hover {
+  background-color: #ddf;
+}
+
+/*
+.content a.link:hover {
+  background-color: transparent;
+}
+.content a.source:hover {
+  background-color: transparent;
+}
+*/
+
+.content a:visited {
+}
+
+.missing-link {
+  background-color: #933;
+  color: #fff;
+  font-weight: bold;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.style-link.external a::after {
+  color: #44e;
+  content: "\25E5\a0";
+  dddfont-family: monospace;
+  font-weight: bold;
+  font-size: 50%;
+  vertical-align: top;
+}
+
+.style-link.external:hover a::after {
+  color: #008;
+  ddd-content: "\25F9\a0";
+}

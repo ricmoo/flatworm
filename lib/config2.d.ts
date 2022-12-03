@@ -3,6 +3,7 @@ export declare class Config {
     readonly root: string;
     readonly title: string;
     readonly subtitle: string;
+    readonly prefix: string;
     readonly srcBaseUrl: null | string;
     readonly codeRoot: string;
     readonly links: Map<string, {
