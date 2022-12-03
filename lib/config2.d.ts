@@ -5,6 +5,7 @@ export declare class Config {
     readonly subtitle: string;
     readonly prefix: string;
     readonly srcBaseUrl: null | string;
+    readonly staticFiles: Array<string>;
     readonly codeRoot: string;
     readonly links: Map<string, {
         title: string;
