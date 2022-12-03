@@ -201,6 +201,8 @@ export class HtmlRenderer extends Renderer {
                     return this.renderMarkdown(node.children);
                  case ElementStyle.CODE:
                      return `<code class="inline">${ this.renderMarkdown(node.children) }</code>`;
+                 case ElementStyle.PARAM:
+                     return `<code class="inline param">${ this.renderMarkdown(node.children) }</code>`;
              }
 
              const tag = Tags[node.style] || "xxx";
