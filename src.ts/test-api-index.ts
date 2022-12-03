@@ -680,22 +680,7 @@ export async function generate(api: API, config: Config) {
     const toc = api.toc;
 
 // @TODO: use obj.id
-    const links: LinkMap = new Map();
-    {
-        const lines = fs.readFileSync("./config.links").toString().split("\n");
-        for (let line of lines) {
-            line = line.trim();
-            if (line === "" || line[0] === "#") { continue; }
-            const match = line.match(/(\S+)\s+\[([^\]]+)\]\(([^\)]+)\)/);
-            if (match == null) {
-                console.log(line);
-                throw new Error("bad link");
-            }
-            const key = match[1], title = match[2], link = match[3];
-
-            links.set(key, { link, title, style: "normal" });
-        }
-    }
+    const links = config.links;
 
     const addLink = (filename: string, obj: Export | Subsection) => {
         if (obj instanceof ObjectExport) {

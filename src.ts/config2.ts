@@ -24,7 +24,6 @@ export class Config {
             const lines = fs.readFileSync(this.resolve(linkFile)).toString().split("\n");
             this.#addLinks(lines);
         }
-        console.log("CC", config);
     }
 
     #addLinks(lines: Array<string>): void {
@@ -50,7 +49,6 @@ export class Config {
         path = resolve(path);
         let value = await import(path);
         if ("default" in value) { value = value["default"]; }
-        //console.log(value);
         return new Config(path, value);
     }
 }
