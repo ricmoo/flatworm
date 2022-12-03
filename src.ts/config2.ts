@@ -10,6 +10,8 @@ export class Config {
     readonly prefix: string;
     readonly srcBaseUrl: null | string;
 
+    readonly staticFiles: Array<string>;
+
     readonly codeRoot: string;
     readonly links: Map<string, { title: string, link: string, style: string }>;
 
@@ -19,6 +21,7 @@ export class Config {
         this.subtitle = config.subtitle || "no subtitle";
         this.prefix = (config.prefix || ".");
         this.srcBaseUrl = config.srcBaseUrl || null;
+        this.staticFiles = (config.staticFiles || [ ]);
         this.codeRoot = this.resolve(config.codeRoot || "..");
 
         this.links = new Map();

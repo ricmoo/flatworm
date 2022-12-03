@@ -1,27 +1,27 @@
 @font-face {
     font-family: 'LatoLight';
-    src: url('/static/lato/Lato-Regular.ttf') format('truetype');
+    src: url('./lato/Lato-Regular.ttf') format('truetype');
     font-weight: normal;
     font-style: normal;
 }
 
 @font-face {
     font-family: 'LatoLight';
-    src: url('/static/lato/Lato-Black.ttf') format('truetype');
+    src: url(',/lato/Lato-Black.ttf') format('truetype');
     font-weight: bold;
     font-style: normal;
 }
 
 @font-face {
     font-family: 'LatoLight';
-    src: url('/static/lato/Lato-Italic.ttf') format('truetype');
+    src: url('./lato/Lato-Italic.ttf') format('truetype');
     font-weight: normal;
     font-style: italic;
 }
 
 @font-face {
     font-family: 'LatoLight';
-    src: url('/static/lato/Lato-BlackItalic.ttf') format('truetype');
+    src: url('./lato/Lato-BlackItalic.ttf') format('truetype');
     font-weight: bold;
     font-style: italic;
 }
@@ -88,7 +88,7 @@ body {
 }
 
 .sidebar .header .logo .image {
-  background: url(https://docs.ethers.io/v5/static/logo.svg) center no-repeat;
+  background: url(./logo.svg) center no-repeat;
   height: 40px;
   width: 100%;
 }
@@ -422,7 +422,7 @@ a.link {
 }
 
 a.link.anchor {
-  background: url(./static/link.svg) left no-repeat;
+  background: url(./link.svg) left no-repeat;
   display: inline-block;
   opacity: 0.0;
   transform: translate(-100%, 15%);
