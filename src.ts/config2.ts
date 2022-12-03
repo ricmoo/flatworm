@@ -54,7 +54,3 @@ export class Config {
         return new Config(path, value);
     }
 }
-
-(async function() {
-    console.log(await Config.fromScript("/Users/dev/Development/ethers/ethers-v6/docs.wrm/config.js"));
-})();
