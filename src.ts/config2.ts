@@ -7,6 +7,7 @@ export class Config {
     readonly title: string;
     readonly subtitle: string;
 
+    readonly prefix: string;
     readonly srcBaseUrl: null | string;
 
     readonly codeRoot: string;
@@ -16,6 +17,7 @@ export class Config {
         this.root = dirname(root);
         this.title = config.title || "no title";
         this.subtitle = config.subtitle || "no subtitle";
+        this.prefix = (config.prefix || ".");
         this.srcBaseUrl = config.srcBaseUrl || null;
         this.codeRoot = this.resolve(config.codeRoot || "..");
 

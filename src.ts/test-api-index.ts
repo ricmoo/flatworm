@@ -1,5 +1,6 @@
 import fs from "fs";
 import { dirname, join, resolve } from "path";
+import { fileURLToPath } from 'url';
 
 import { Config } from "./config2.js";
 
@@ -368,12 +369,17 @@ function showType(type: Type, links: LinkMap): string {
 
 
 
-function addHeader(output: Array<string>, links: LinkMap, toc: Array<TocEntry>, section: Section): void {
+function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: Array<TocEntry>, section: Section): void {
     const anchor = links.get(section.anchor);
-    output.push(`<html><head><link rel="stylesheet" href="/style-all.css"></head><body>`);
+    output.push(`<html><head>`);
+    output.push(`<link rel="stylesheet" href="/${ config.prefix }/static/style-v2.css">`);
+    output.push(`<meta property="og:title" content="Documentation">`);
+    output.push(`<meta property="og:description" content="Documentation for ethers, a complete, tiny and simple Ethereum library.">`);
+    output.push(`<meta property="og:image" content="/${ config.prefix }/static/social.jpg">`);
+    output.push(`</head><body>`);
 
     output.push(`<div class="sidebar"><div class="header">`);
-    output.push(`<a class="logo" href="/"><div class="image"></div><div class="name">ethers</div><div class="version">v6-beta</div></a>`);
+    output.push(`<a class="logo" href="/"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
     output.push(`</div><div class="toc">`);
     output.push(`<div class="title"><a href="/">DOCUMENTATION</a></div>`);
     const countDepth = (value: string) => {
@@ -792,7 +798,7 @@ export async function generate(api: API, config: Config) {
     const mainToc: Array<{ path: string, entry: TocEntry, section: Section }> = [ ];
 
     for (const [ path, section ] of toc) {
-        const filename = join("/output", path + "/");
+        const filename = join("/", config.prefix, path + "/");
 
         const entry = { link: filename, style: "normal", title: section.title };
         mainToc.push({ path, entry, section });
@@ -839,7 +845,7 @@ export async function generate(api: API, config: Config) {
         //const section = toc.get(path);
 
         const output: Array<string> = [ ];
-        addHeader(output, links, mainToc.map(e => e.entry), section);
+        addHeader(config, output, links, mainToc.map(e => e.entry), section);
 
         const localToc = addExports(api, [ ], links, section.objs);
 
@@ -863,10 +869,39 @@ export async function generate(api: API, config: Config) {
         }
         addFooter(output, previousEntry, nextEntry);
 
-        const filename = resolve("output/docs", path, "index.html");
+        const filename = resolve("output/docs", config.prefix, path, "index.html");
         fs.mkdirSync(dirname(filename), { recursive: true });
         fs.writeFileSync(filename, output.join(""));
     }
+
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    [
+        "link.svg",
+        "lato/index.html",
+        "lato/Lato-Italic.ttf",
+        "lato/Lato-Black.ttf",
+        "lato/Lato-Regular.ttf",
+        "lato/Lato-BlackItalic.ttf",
+        "lato/OFL.txt",
+        "lato/README.txt",
+//        "search.js",
+//        "script.js",
+        "style-v2.css"
+    ].forEach((_filename) => {
+        const filename = resolve(__dirname, "../static", _filename);
+        const target = resolve("output/docs", config.prefix, "static", _filename);
+        const content = fs.readFileSync(filename);
+        fs.mkdirSync(dirname(target), { recursive: true });
+        fs.writeFileSync(target, content);
+    });
+
+/*
+    for (const [ _filename, content ] of staticFiles) {
+        const filename = resolve("output/docs", config.prefix, _filename);
+        fs.mkdirSync(dirname(filename), { recursive: true });
+        fs.writeFileSync(filename, content);
+    }
+*/
 
 }
 
@@ -874,6 +909,5 @@ export async function generate(api: API, config: Config) {
     const path = resolve(process.argv[2]);
     const config = await Config.fromScript(path);
     const api = new API(config.codeRoot);
-    console.log(api);
     generate(api, config);
 })();

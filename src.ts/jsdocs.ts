@@ -223,9 +223,9 @@ function getParams(params: Array<Node>): Array<Param> {
     return params.map((param: Node) => {
         // Assignment: foo(bar = 12)
         if (param.type === "AssignmentPattern") {
-        console.log("EEK", param.left);
             // @TODO: Remove this and make it an error
             param = param.left;
+            throw new Error("do not use assignment; use null");
 
         } else if (param.type === "RestElement") {
             const name = param.argument.name.match(/^_*([^_]*)$/)[1];
@@ -474,7 +474,6 @@ export function getExports(path: string): Record<string, Set<string>> {
     };
 
     process(path);
-    console.log("EXPORTS:", result);
 
     return result;
 }
@@ -501,7 +500,6 @@ export function getObjects(path: string, exports: Set<string>): Array<any> {
 
         if (type === "File") {
             const jsdoc = getJsdoc({ leadingComments: (node.comments || []).slice(0, 1) });
-            console.log("MOO", node.comments);
             if (jsdoc.match(/(@_ignore|@private)/)) {
                 ignoreFile = true;
                 return;;
@@ -1189,7 +1187,6 @@ export class API {
         this.objs = [ ];
 
         const allExports = getExports(this.basePath)
-console.log("EXP", allExports);
 
         const fileMap: Map<string, { jsdocs: string, exports: Set<string>, imports: Set<string> }> = new Map();
         const filenames: Array<string> = [ ];
@@ -1351,7 +1348,6 @@ console.log("EXP", allExports);
                 }
             }
         }
-        console.log("FILEMAP", fileMap);
 
         const toc: Map<string, Section> = new Map();
         const remaining: Map<string, Export> = new Map();
