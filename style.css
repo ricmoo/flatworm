@@ -1,0 +1,117 @@
+html {
+  font-family: sans-serif;
+  margin: 0;
+}
+
+body {
+  padding: 20px 0;
+  margin: 0;
+}
+
+div {
+  box-sizing: border-box;
+}
+
+.search-container {
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom: 2px solid #ddd;
+  box-shadow: 0 1px 20px #888;
+  padding-top: 25px;
+  position: fixed;
+  text-align: center;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+}
+
+.search-container .search-box {
+  background: #fff;
+  border: 3px solid black;
+  border-radius: 20px;
+  display: inline-block;
+  width: 250px;
+}
+
+.search-container input::placeholder {
+  font-style: italic;
+}
+
+.search-container input {
+  border-color: transparent;
+  font-size: 25px;
+  outline: none;
+  text-align: center;
+  width: 200px;
+}
+
+.content {
+  margin: 100px 0 20px 200px;
+  column-count: 2;
+  width: 900px;
+}
+
+.group {
+  break-inside: avoid-column;
+  margin: 20px 0;
+  padding: 15px 0;
+  width: 400px;
+}
+
+/* sometimes the last line pops to the next column, so add
+   an empty line */
+.group::after {
+  content: "\a0";
+}
+
+.group .header {
+  border-bottom: 2px solid #000;
+  color: #000;
+  font-size: 25px;
+  font-weight: bold;
+  margin: 0 0 15px 0;
+  padding: 10px 0 10px 0;
+}
+
+.entry {
+  color: #555;
+  font-family: monospace;
+  font-size: 16px;
+  margin: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 400px;
+}
+
+.entry b {
+  color: #444;
+  font-size: 20px;
+}
+
+.entry.other.indent-1 {
+  padding-left: 45px;
+  font-size: 20px;
+  text-indent: -25px;
+}
+
+.entry.other b {
+  color: #66f;
+  font-weight: normal;
+}
+
+.entry.other {
+  font-style: italic;
+  overflow: visible;;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.hide {
+  display: none;
+}
+
+.entry.indent-1 {
+  padding-left: 20px;
+}
+
