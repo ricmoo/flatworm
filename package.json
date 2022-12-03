@@ -2,7 +2,9 @@
   "name": "flatworm",
   "version": "0.0.2-beta.8",
   "description": "A very simple documentation generation tool.",
-  "engines" : { "node" : ">=12.17.0" },
+  "engines": {
+    "node": ">=12.17.0"
+  },
   "main": "./lib/index.js",
   "bin": {
     "flatworm": "./lib/cli.js"
@@ -11,10 +13,18 @@
     "lib": "lib",
     "test": "test"
   },
-  "dependencies": {},
-  "devDependencies": {
-    "@types/node": "^16.11.17",
+  "dependencies": {
+    "@babel/core": "^7.19.0",
+    "@babel/parser": "^7.19.0",
+    "@babel/plugin-syntax-typescript": "^7.18.6",
+    "@babel/preset-typescript": "^7.18.6",
+    "@babel/traverse": "^7.19.0",
+    "ts-morph": "^15.0.0",
     "typescript": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/babel__core": "^7.1.19",
+    "@types/node": "^16.11.17"
   },
   "scripts": {
     "auto-build": "npm run build -- -w",
@@ -29,6 +39,7 @@
     "type": "git",
     "url": "git://github.com/ricmoo/flatworm.git"
   },
+  "type": "module",
   "author": "Richard Moore <me@ricmoo.com>",
   "license": "MIT"
 }
