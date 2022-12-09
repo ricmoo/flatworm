@@ -27,7 +27,6 @@ const _emitError = async (func) => {
         }
         throw new Error("missing error 2");
     } catch (error) {
-        value = error;
         _output.push({ value: error, type: "error", sync });
     }
 }
@@ -66,7 +65,7 @@ function execTransform(code: string, type: "error" | "result"): string {
     //const str = (value: string) => babel.types.stringLiteral(value);
     const call = (name: string, ...args: Array<babel.types.Expression>) =>
         babel.types.callExpression(id(name), args);
-    const stmnt = (expr: babel.types.Expression) => babel.types.expressionStatement(expr);
+    //const stmnt = (expr: babel.types.Expression) => babel.types.expressionStatement(expr);
 
     const TransformWrap = {
         exit(path: any) {
@@ -81,7 +80,7 @@ function execTransform(code: string, type: "error" | "result"): string {
                     // Add a try...catch to things we expect to throw
                     if (type === "error") {
                         const block = babel.types.blockStatement([
-                            stmnt(path.node) //call("_emit", path.node, str()))
+                            babel.types.returnStatement(path.node) //call("_emit", path.node, str()))
                         ]);
                         const arrow = babel.types.arrowFunctionExpression([ ],
                             block
@@ -248,7 +247,7 @@ export class Script {
         }
         exec.push(ExecFooter);
 
-        console.log("CODE", exec.join("\n"));
+        //console.log("CODE", exec.join("\n"));
 
         const result: Array<{ type: ScriptLineType, line: string }> = [ ];
 
@@ -263,9 +262,9 @@ export class Script {
         let emitted: ExecResult;
         try {
             emitted = await script.runInContext(context, { });
-            console.log("EMIT", emitted);
+            //console.log("EMIT", emitted);
         } catch (error) {
-            console.log("ERROR", error);
+            //console.log("ERROR", error);
             throw error;
         }
 
