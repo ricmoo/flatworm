@@ -5,7 +5,9 @@ export declare class Config {
     readonly subtitle: string;
     readonly prefix: string;
     readonly srcBaseUrl: null | string;
+    readonly contextify: (context: any) => void;
     readonly staticFiles: Array<string>;
+    readonly docRoot: string;
     readonly codeRoot: string;
     readonly links: Map<string, {
         title: string;
@@ -15,4 +17,6 @@ export declare class Config {
     constructor(root: string, config: any);
     resolve(...args: Array<string>): string;
     static fromScript(path: string): Promise<Config>;
+    static fromJson(path: string, json: string): Config;
+    static fromPath(path: string): Promise<Config>;
 }

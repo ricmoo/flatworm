@@ -48,6 +48,7 @@ body {
   font-size: 16px;
   overflow: auto;
   padding-top: 200px;
+  padding-bottom: 40px;
   position: fixed;
   top: 0;
   bottom: 0;
@@ -288,6 +289,58 @@ body {
   margin: 30px 0 16px;
   padding-bottom: 7px;
 }
+/*
+.code-title {
+    height: 7px;
+    margin-left: 30px;
+    margin-top: 10px;
+    position: relative;
+}
+
+.code-title div {
+    box-sizing: border-box;
+    color: #88a;
+    font-style: italic;
+    font-size: 18px;
+    padding-right: 10px;
+    position: absolute;
+    text-align: right;
+    width: 100%;
+}
+*/
+.code-block {
+    background: #f8f8ff;
+    border: 2px solid #88a;
+    color: #000;
+    margin: 20px 0 30px 30px;
+    padding: 15px 20px;
+    font-family: monospace;
+    font-size: 18px;
+    white-space: pre;
+    overflow: scroll;
+}
+
+.code-block .code-comment {
+    color: #000;
+    opacity: 0.5;
+}
+
+.code-block .code-error {
+    color: #000;
+    opacity: 0.5;
+}
+
+.code-block .code-result {
+    color: #00a;
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.code-block .code-error {
+    color: #a00;
+    font-style: italic;
+    opacity: 0.7;
+}
 
 .signature {
   padding-left: 50px;
@@ -359,11 +412,12 @@ p:first-child {
 }
 
 p:last-child {
-  margin-top: 0;
+  margin-bottom: 0;
 }
 
 p {
-  margin: 14px 0;
+  margin: 16px 0;
+  line-height: 24px;
 }
 
 .content .toc {

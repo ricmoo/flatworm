@@ -1,3 +1,5 @@
+import { Script } from "./script2.js";
+import type { Config } from "./config2.js";
 declare type Node = any;
 export declare type VisitFunc = (type: string, node: Node, ancestors: Array<Node>, depth: number) => void;
 export declare function indent(size: number): string;
@@ -55,6 +57,9 @@ export declare class Export {
     get docs(): string;
     get flatworm(): string;
     get docTags(): Record<string, Array<string>>;
+    getTag(key: string): Array<string>;
+    evaluate(config: Config): Promise<void>;
+    examples(): Array<Script>;
     _updateDocs(docs: string): void;
     dump(_indent?: number): void;
 }
@@ -93,6 +98,7 @@ export declare class ObjectExport extends Export {
     readonly supers: Array<string>;
     readonly type: string;
     constructor(type: string, filename: string, lineno: number, name: string, docs: string, supers: Array<string>);
+    evaluate(config: Config): Promise<void>;
     dump(_indent?: number): void;
     _addMethod(value: FunctionExport): void;
     _addProperty(value: PropertyExport, access: "+read" | "+write" | "readonly"): void;
@@ -103,6 +109,7 @@ export declare class ClassExport extends ObjectExport {
     readonly isAbstract: boolean;
     get ctor(): null | FunctionExport;
     constructor(filename: string, lineno: number, name: string, docs: string, supers: Array<string>, isAbstract: boolean);
+    evaluate(config: Config): Promise<void>;
     _setConstructor(value: FunctionExport): void;
     _addStaticMethod(value: FunctionExport): void;
     dump(_indent?: number): void;
@@ -115,25 +122,26 @@ export declare class TypeExport extends ReturnsExport {
 export declare class ConstExport extends ReturnsExport {
     get type(): string;
 }
-export declare type Subsection = {
+export declare type SubsectionInfo = {
     title: string;
     flatworm: string;
     objs: Array<Export>;
     anchor: string | null;
 };
-export declare type Section = {
+export declare type SectionInfo = {
     title: string;
     flatworm: string;
-    objs: Array<Subsection | Export>;
+    objs: Array<SubsectionInfo | Export>;
     anchor: string | null;
 };
 export declare class API {
     readonly basePath: string;
     readonly objs: Array<Export>;
-    readonly toc: Map<string, Section>;
+    readonly toc: Map<string, SectionInfo>;
     getExport(name: string): Export;
     getSupers(name: string): Array<ObjectExport>;
     constructor(basePath: string);
+    evaluate(config: Config): Promise<void>;
     dump(): void;
 }
 export {};
