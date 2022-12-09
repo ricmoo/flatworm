@@ -5,6 +5,10 @@ import { parse } from "@babel/parser";
 
 import { parseMarkdown } from "./markdown.js";
 
+import { Script } from "./script2.js";
+
+import type { Config } from "./config2.js";
+
 const DEBUG = false;
 
 type Node = any;
@@ -819,6 +823,7 @@ export class Export {
     readonly lineno: number;
     readonly name: string;
 
+    #examples: null | Array<Script>;
     #docs: string;
 
     constructor(filename: string, lineno: number, name: string, docs: string) {
@@ -826,6 +831,7 @@ export class Export {
         this.lineno = lineno;
         this.name = name;
         this.#docs = docs;
+        this.#examples = null;
     }
 
     get id(): string { return this.name; }
@@ -838,6 +844,30 @@ export class Export {
 
     get docTags(): Record<string, Array<string>> {
         return splitDocs(this.#docs).docTags;;
+    }
+
+    getTag(key: string): Array<string> {
+        const values = this.docTags[key];
+        if (values == null) { return [ ]; }
+        return values;
+    }
+
+    async evaluate(config: Config): Promise<void> {
+        for (const example of this.examples()) {
+            await example.evaluate(config);
+        }
+    }
+
+    examples(): Array<Script> {
+        if (this.#examples == null) {
+            const examples = [ ];
+            for (const example of this.getTag("example")) {
+                examples.push(new Script(example, "javascript"));
+            }
+            this.#examples = examples;
+        }
+
+        return this.#examples;
     }
 
     _updateDocs(docs: string): void {
@@ -1030,6 +1060,13 @@ export class ObjectExport extends Export {
         this.properties = new Map();
     }
 
+    async evaluate(config: Config): Promise<void> {
+        await super.evaluate(config);
+
+        for (const [ , obj ] of this.methods) { await obj.evaluate(config); }
+        for (const [ , obj ] of this.methods) { await obj.evaluate(config); }
+    }
+
     dump(_indent: number = 0): void {
         super.dump(_indent);
         if (this.supers.length) {
@@ -1084,6 +1121,12 @@ export class ClassExport extends ObjectExport {
         this.#ctor = null;
     }
 
+    async evaluate(config: Config): Promise<void> {
+        await super.evaluate(config);
+
+        for (const [ , obj ] of this.staticMethods) { await obj.evaluate(config); }
+    }
+
     _setConstructor(value: FunctionExport): void {
         if (this.#ctor) { throw new Error(`constructor already defined`); }
         this.#ctor = value;
@@ -1126,17 +1169,17 @@ function splitDocloc(docloc: string): { path: string, title: string, anchor: nul
     return { path: match[1].trim(), title: (match[3] || "").trim(), anchor: (match[5] || null) };
 }
 
-export type Subsection = {
+export type SubsectionInfo = {
     title: string;
     flatworm: string;
     objs: Array<Export>;
     anchor: string | null;
 };
 
-export type Section = {
+export type SectionInfo = {
     title: string;
     flatworm: string;
-    objs: Array<Subsection | Export>;
+    objs: Array<SubsectionInfo | Export>;
     anchor: string | null;
 }
 
@@ -1144,7 +1187,7 @@ export class API {
     readonly basePath: string;
     readonly objs: Array<Export>;
 
-    readonly toc: Map<string, Section>;
+    readonly toc: Map<string, SectionInfo>;
 
     getExport(name: string): Export {
         const matches = this.objs.filter((e) => (e.name === name));
@@ -1349,7 +1392,7 @@ export class API {
             }
         }
 
-        const toc: Map<string, Section> = new Map();
+        const toc: Map<string, SectionInfo> = new Map();
         const remaining: Map<string, Export> = new Map();
 
         const specific: Array<{ docloc: string, obj: Export }> = [ ];
@@ -1379,7 +1422,7 @@ export class API {
             } else {
                 const section = toc.get(path);
 
-                let found: null | Subsection = null;
+                let found: null | SubsectionInfo = null;
                 for (const obj of section.objs) {
                     if (obj instanceof Export) { continue; }
                     if (obj.anchor === anchor) {
@@ -1463,7 +1506,7 @@ export class API {
 
         // Add the remaining objects to the root? Or other?
         if (remaining.size > 0) {
-            let objs: Array<Export | Subsection> = [ ]
+            let objs: Array<Export | SubsectionInfo> = [ ]
             if (!toc.has("api")) {
                 toc.set("api", { anchor: null, title: "API", flatworm: "Applcation Programming Interface", objs });
             } else {
@@ -1511,6 +1554,12 @@ export class API {
             }
 
             this.toc = toc;
+        }
+    }
+
+    async evaluate(config: Config): Promise<void> {
+        for (const obj of this.objs) {
+            await obj.evaluate(config);
         }
     }
 

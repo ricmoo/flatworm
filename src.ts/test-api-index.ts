@@ -3,11 +3,17 @@ import { dirname, join, resolve } from "path";
 import { fileURLToPath } from 'url';
 
 import { Config } from "./config2.js";
+import {
+    BodyContent, CodeContent, Content,
+    Document, Section
+} from "./document2.js";
 
 import {
     ElementNode, LinkNode, ListNode, Node, TextNode,
     parseMarkdown
 } from "./markdown.js";
+
+import type { Script } from "./script2.js";
 
 import {
     API,
@@ -18,8 +24,7 @@ import {
     TypeLiteral, TypeMapping, TypeTodo, TypeWrapped
 } from "./jsdocs.js";
 
-import type { Section, Subsection } from "./jsdocs.js";
-
+import type { SectionInfo, SubsectionInfo } from "./jsdocs.js";
 
 export type IndexEntryType = "class" | "constant" | "function" |
     "method" | "property" | "static_method" | "type" | "other";
@@ -53,7 +58,7 @@ function renderNode(node: Node, links: LinkMap): string {
                 style = "normal";
             }
             let external = "", target = "";
-            if (link.indexOf(":") >= 0) {
+            if (link.indexOf(":/\/") >= 0) {
                 external = "external";
                 target = ` target="_blank"`;
             }
@@ -76,8 +81,32 @@ function renderNode(node: Node, links: LinkMap): string {
     throw new Error();
 }
 
+function renderNodes(docs: Array<Node>, links: LinkMap): string {
+    return docs.map((n) => `<p>${ renderNode(n, links) }</p>`).join("\n");
+}
+
 function renderDocs(docs: string, links: LinkMap): string {
-    return parseMarkdown(docs).map((n) => `<p>${ renderNode(n, links) }</p>`).join("\n");
+    return renderNodes(parseMarkdown(docs), links);//.map((n) => `<p>${ renderNode(n, links) }</p>`).join("\n");
+}
+
+function renderContents(contents: Array<Content>, links: LinkMap): string {
+    const output: Array<string> = [ ];
+
+    for (const content of contents) {
+        if (content.tag !== "null") {
+            output.push(`<div class="title-${ content.tag }">${ renderNode(content.titleNode, links) }</div>`)
+        }
+
+        if (content instanceof BodyContent) {
+            output.push(`<div><p>${ renderNodes(content.body, links) }</p></div>`);
+        } else if (content instanceof CodeContent) {
+            output.push(`<div class="code-block">${ content.source }</div>`);
+        } else {
+            throw new Error("not implemented");
+        }
+    }
+
+    return output.join("");
 }
 
 export class IndexGroup {
@@ -276,12 +305,12 @@ function repeat(c: string, width: number): string {
     return result.substring(0, width);
 }
 */
-/*
+
 function htmlify(value: string): string {
     if (value == null) { return "undef"; }
     return value.replace(/&/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-*/
+
 export function generateIndex(api: API) {
     const index = getIndex(api);
     ///console.log("=====================");
@@ -368,9 +397,7 @@ function showType(type: Type, links: LinkMap): string {
 };
 
 
-
-function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: Array<TocEntry>, section: Section): void {
-    const anchor = links.get(section.anchor);
+function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: Array<TocEntry>): void {
     output.push(`<html><head>`);
     output.push(`<link rel="stylesheet" href="/${ config.prefix }/static/style-v2.css">`);
     output.push(`<meta property="og:title" content="Documentation">`);
@@ -379,9 +406,9 @@ function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: A
     output.push(`</head><body>`);
 
     output.push(`<div class="sidebar"><div class="header">`);
-    output.push(`<a class="logo" href="/"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
+    output.push(`<a class="logo" href="/${ config.prefix }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
     output.push(`</div><div class="toc">`);
-    output.push(`<div class="title"><a href="/">DOCUMENTATION</a></div>`);
+    output.push(`<div class="title"><a href="/${ config.prefix }">DOCUMENTATION</a></div>`);
     const countDepth = (value: string) => {
         return (value.split("/").length - 1) + (value.split("#").length - 1);
     };
@@ -396,15 +423,43 @@ function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: A
         output.push(`<div class="depth-${ countDepth(entry.link) - minDepth}"><a href="${ entry.link }">${ entry.title }</a></div>`);
     }
     output.push(`</div></div>`);
+    output.push(`<div class="content"><div class="breadcrums">`);
+    output.push(`<i>Documentation</i>`);
+    output.push(`</div>`);
+}
 
-    output.push(`<div class="content">`);
+function addSection(output: Array<string>, links: LinkMap, section: Section): void {
+//    const anchor = "";//links.get(section.anchor);
+    output.push(`<div class="show-links">`);
+//    if (anchor) {
+        //output.push(`<div class="section-title"><a class="link anchor" href="${ anchor.link }">&nbsp;</a>${ section.title }</div>`);
+//    } else {
+        output.push(`<div class="section-title">${ renderNode(section.titleNode, links) }</div>`);
+//    }
+
+    output.push(`<div class="docs">${ renderContents(section.body, links) }</div>`);
+
+    output.push(`</div>`);
+
+    for (const subsection of section.subsections) {
+        output.push(`<div>`);
+        output.push(`<div class="title">${ renderNode(subsection.titleNode, links) }</div>`);
+        output.push(`<div class="docs">${ renderContents(subsection.contents, links) }</div>`);
+        output.push(`</div>`);
+    }
+}
+
+function addSectionInfo(output: Array<string>, links: LinkMap, section: SectionInfo): void {
+    const anchor = links.get(section.anchor);
     output.push(`<div class="show-links">`);
     if (anchor) {
         output.push(`<div class="section-title"><a class="link anchor" href="${ anchor.link }">&nbsp;</a>${ section.title }</div>`);
     } else {
         output.push(`<div class="section-title">${ section.title }</div>`);
     }
+
     output.push(`<div class="docs">${ renderDocs(section.flatworm, links) }</div>`);
+
     output.push(`</div>`);
 }
 
@@ -418,6 +473,14 @@ function addFooter(output: Array<string>, previous: null | TocEntry, next: null 
     }
     output.push(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on DATE HERE.</div></div>`);
     output.push(`</div><script type="module" src="./script-all.js"></script></body></html>`);
+}
+
+function addExample(output: Array<string>, script: Script): void {
+    output.push(`<div class="code-block">`);
+    script.forEach(({ line, type }) => {
+        output.push(`<span class="code-${ type }">${ htmlify(line) }</span>\n`);
+    });
+    output.push(`</div>`);
 }
 
 function addReturnsExport(output: Array<string>, links: LinkMap, obj: ReturnsExport): void {
@@ -471,7 +534,12 @@ function addReturnsExport(output: Array<string>, links: LinkMap, obj: ReturnsExp
 
     output.push(`<div class="docs">${ renderDocs(obj.flatworm, links) }</div>`);
     output.push(`</div>`);
+
+    for (const example of obj.examples()) {
+        addExample(output, example);
+    }
 }
+
 // @TODO: remove API since supers exists on obj
 function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: ObjectExport): TocEntry {
     const name = obj.name;
@@ -540,6 +608,10 @@ function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: 
 
     output.push(`<div class="cls docs">${ renderDocs(obj.flatworm, links) }</div>`);
     output.push(`</div>`);
+
+    for (const example of obj.examples()) {
+        addExample(output, example);
+    }
 
     let staticMethods: Array<FunctionExport> = [ ];
     const creates = [ ];
@@ -620,7 +692,7 @@ export type TocEntry = {
 };
 
 // @TODO: remove api; supers is on obj
-function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | Subsection>): Array<TocEntry> {
+function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | SubsectionInfo>): Array<TocEntry> {
     const toc = [ ];
 
     // Show all types
@@ -679,16 +751,16 @@ function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array
 }
 
 export async function generate(api: API, config: Config) {
-//    const BASE_URL = "http://localhost:8080/lcov-report/ethers-v6/src.ts/{FILENAME}.html#L{LINENO}";
-//    const BASE_URL = "https:/\/github.com/ethers-io/ethers.js/blob/v6-beta-exports/src.ts/{FILENAME}#L{LINENO}"
     const BASE_URL = config.srcBaseUrl;
+
+    const doc = Document.fromConfig(config);
 
     const toc = api.toc;
 
 // @TODO: use obj.id
     const links = config.links;
 
-    const addLink = (filename: string, obj: Export | Subsection) => {
+    const addLink = (filename: string, obj: Export | SubsectionInfo) => {
         if (obj instanceof ObjectExport) {
             links.set(obj.name, {
                 link: `${ filename }#${ obj.name }`,
@@ -794,8 +866,39 @@ export async function generate(api: API, config: Config) {
             }
         }
     };
+    
 
-    const mainToc: Array<{ path: string, entry: TocEntry, section: Section }> = [ ];
+    const mainToc: Array<{ path: string, entry: TocEntry, section: Section | SectionInfo }> = [ ];
+
+    for (const section of doc.sections) {
+        //if (section.path === "") { continue; }
+        const title = section.title;
+        const filename = join("/", config.prefix, section.path + "/");
+        mainToc.push({
+            path: section.path,
+            entry: { link: filename, style: "normal", title },
+            section
+        });
+
+        if (section.anchor) {
+            if (links.has(section.anchor)) { throw new Error(`duplicate anchor: ${ section.anchor }`); }
+            links.set(section.anchor, {
+                link: filename,
+                style: "normal",
+                title: section.title
+            });
+        }
+
+        for (const subsection of section.subsections) {
+            if (!subsection.anchor) { continue; }
+            if (links.has(subsection.anchor)) { throw new Error(`duplicate anchor: ${ subsection.anchor }`); }
+            links.set(section.anchor, {
+                link: `${ filename }#${ subsection.anchor }`,
+                style: "normal",
+                title: section.title
+            });
+        }
+    }
 
     for (const [ path, section ] of toc) {
         const filename = join("/", config.prefix, path + "/");
@@ -825,37 +928,37 @@ export async function generate(api: API, config: Config) {
         const compsA = a.entry.link.split("#")[0].split("/");
         const compsB = b.entry.link.split("#")[0].split("/");
         while (compsA.length && compsB.length) {
+            let priA = 0, priB = 0;
+            if (a.section instanceof Section) { priA = a.section.priority }
+            if (b.section instanceof Section) { priB = b.section.priority }
+            if (priA !== priB) { return priB - priA; }
             const cmp = compsA.shift().localeCompare(compsB.shift());
             if (cmp !== 0) { return cmp; }
         }
         return compsA.length - compsB.length;
     });
-/*
-    const mainToc: Array<{ title: string, link: string }> = [ ];
-    for (const [ , section ] of toc) {
-        const toc = addExports([ ], links, section.objs);
-    }
-*/
 
-    //const paths = Array.from(toc.keys());
-    //console.log("PATHS:", paths, mainToc);
     for (let i = 0; i < mainToc.length; i++) {
         const { path, section } = mainToc[i];
-        //const path = paths[i];
-        //const section = toc.get(path);
 
         const output: Array<string> = [ ];
-        addHeader(config, output, links, mainToc.map(e => e.entry), section);
+        addHeader(config, output, links, mainToc.filter(e => !!e.path).map(e => e.entry));
 
-        const localToc = addExports(api, [ ], links, section.objs);
+        if (section instanceof Section) {
+            addSection(output, links, section);
 
-        output.push(`<ul class="toc">`)
-        for (const entry of localToc) {
-            output.push(`<li class="style-${ entry.style }"><a class-"link-lit" href="${ entry.link }">${ entry.title }</a></li>`);
+        } else {
+            addSectionInfo(output, links, section);
+            const localToc = addExports(api, [ ], links, section.objs);
+
+            output.push(`<ul class="toc">`)
+            for (const entry of localToc) {
+                output.push(`<li class="style-${ entry.style }"><a class-"link-lit" href="${ entry.link }">${ entry.title }</a></li>`);
+            }
+            output.push(`</ul>`)
+
+            addExports(api, output, links, section.objs);
         }
-        output.push(`</ul>`)
-
-        addExports(api, output, links, section.objs);
 
         let previousEntry: null | TocEntry = null;
         let nextEntry: null | TocEntry = null;
@@ -915,7 +1018,8 @@ export async function generate(api: API, config: Config) {
 
 (async function() {
     const path = resolve(process.argv[2]);
-    const config = await Config.fromScript(path);
+    const config = await Config.fromPath(path);
     const api = new API(config.codeRoot);
+    await api.evaluate(config);
     generate(api, config);
 })();

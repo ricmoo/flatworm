@@ -1,5 +1,5 @@
 import fs from "fs";
-import { dirname, resolve } from "path";
+import { dirname, extname, resolve } from "path";
 
 export class Config {
     readonly root: string;
@@ -9,9 +9,11 @@ export class Config {
 
     readonly prefix: string;
     readonly srcBaseUrl: null | string;
+    readonly contextify: (context: any) => void;
 
     readonly staticFiles: Array<string>;
 
+    readonly docRoot: string;
     readonly codeRoot: string;
     readonly links: Map<string, { title: string, link: string, style: string }>;
 
@@ -22,7 +24,14 @@ export class Config {
         this.prefix = (config.prefix || ".");
         this.srcBaseUrl = config.srcBaseUrl || null;
         this.staticFiles = (config.staticFiles || [ ]);
+        this.docRoot = this.resolve(config.docRoot || ".");
         this.codeRoot = this.resolve(config.codeRoot || "..");
+
+        if (typeof(config.contextify) === "function") {
+             this.contextify = config.contextify;
+        } else {
+            this.contextify = function(context: any) { };
+        }
 
         this.links = new Map();
         for (const linkFile of config.links) {
@@ -55,5 +64,30 @@ export class Config {
         let value = await import(path);
         if ("default" in value) { value = value["default"]; }
         return new Config(path, value);
+    }
+
+    static fromJson(path: string, json: string): Config {
+        return new Config(path, JSON.parse(json));
+    }
+
+    static async fromPath(path: string): Promise<Config> {
+        const stat = fs.statSync(path);
+        if (stat.isDirectory()) {
+           for (const _filename of [ "config.js", "config.json" ]) {
+               const filename = resolve(path, _filename);
+               if (fs.existsSync(filename)) {
+                   return await Config.fromPath(filename);
+               }
+           }
+           throw new Error("no config found in folder");
+        }
+
+        if (extname(path) === ".json") {
+            return Config.fromJson(path, fs.readFileSync(path).toString());
+        } else if (extname(path) === ".js") {
+            return await Config.fromScript(path);
+        }
+
+        throw new Error("invalid config");
     }
 }
