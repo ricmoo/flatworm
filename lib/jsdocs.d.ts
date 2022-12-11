@@ -53,6 +53,7 @@ export declare class Export {
     readonly lineno: number;
     readonly name: string;
     constructor(filename: string, lineno: number, name: string, docs: string);
+    get dependencies(): Array<string>;
     get id(): string;
     get docs(): string;
     get flatworm(): string;
@@ -122,25 +123,35 @@ export declare class TypeExport extends ReturnsExport {
 export declare class ConstExport extends ReturnsExport {
     get type(): string;
 }
-export declare type SubsectionInfo = {
-    title: string;
-    flatworm: string;
-    objs: Array<Export>;
-    anchor: string | null;
-};
-export declare type SectionInfo = {
-    title: string;
-    flatworm: string;
-    objs: Array<SubsectionInfo | Export>;
-    anchor: string | null;
-};
+export declare class _ApiSection<T> {
+    #private;
+    objs: Array<T>;
+    constructor(title?: string, flatworm?: string, anchor?: string);
+    get anchor(): string;
+    get flatworm(): string;
+    get title(): string;
+    _addObject(item: T): void;
+    _setFlatworm(flatworm: string): void;
+    _setTitle(title: string): void;
+    _setAnchor(anchor: string): void;
+}
+export declare class ApiSubsection extends _ApiSection<Export> {
+    _addExport(ex: Export): void;
+}
+export declare class ApiSection extends _ApiSection<ApiSubsection | Export> {
+    readonly dependencies: Array<string>;
+    constructor(title?: string, flatworm?: string, anchor?: string);
+    _addSubsection(subsection: ApiSubsection | Export): void;
+    _addDependency(dep: string): void;
+}
 export declare class API {
     readonly basePath: string;
     readonly objs: Array<Export>;
-    readonly toc: Map<string, SectionInfo>;
+    readonly toc: Map<string, ApiSection>;
     getExport(name: string): Export;
     getSupers(name: string): Array<ObjectExport>;
     constructor(basePath: string);
+    resolve(...args: Array<string>): string;
     evaluate(config: Config): Promise<void>;
     dump(): void;
 }

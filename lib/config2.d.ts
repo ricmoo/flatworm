@@ -15,7 +15,10 @@ export declare class Config {
         style: string;
     }>;
     constructor(root: string, config: any);
+    getTimestamp(path: string): Promise<null | number>;
     resolve(...args: Array<string>): string;
+    resolveDoc(...args: Array<string>): string;
+    resolveCode(...args: Array<string>): string;
     static fromScript(path: string): Promise<Config>;
     static fromJson(path: string, json: string): Config;
     static fromPath(path: string): Promise<Config>;

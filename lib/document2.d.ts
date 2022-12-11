@@ -13,9 +13,11 @@ export declare class Section extends Fragment {
     readonly path: string;
     readonly body: Array<Content>;
     readonly subsections: Array<Subsection>;
-    constructor(value: string, path: string);
+    readonly filename: null | string;
+    constructor(value: string, path: string, filename?: string);
+    get dependencies(): Array<string>;
     get priority(): number;
-    static fromContent(anchor: string, content: string): Section;
+    static fromContent(anchor: string, content: string, filename?: string): Section;
 }
 export declare class Subsection extends Fragment {
     readonly contents: Array<Content>;
