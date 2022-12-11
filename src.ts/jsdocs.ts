@@ -1,5 +1,5 @@
 import fs from "fs";
-import { dirname, join, relative } from "path";
+import { dirname, join, relative, resolve } from "path";
 
 import { parse } from "@babel/parser";
 
@@ -834,6 +834,8 @@ export class Export {
         this.#examples = null;
     }
 
+    get dependencies(): Array<string> { return [ this.filename ]; }
+
     get id(): string { return this.name; }
 
     get docs(): string { return this.#docs; }
@@ -1169,6 +1171,7 @@ function splitDocloc(docloc: string): { path: string, title: string, anchor: nul
     return { path: match[1].trim(), title: (match[3] || "").trim(), anchor: (match[5] || null) };
 }
 
+/*
 export type SubsectionInfo = {
     title: string;
     flatworm: string;
@@ -1178,16 +1181,69 @@ export type SubsectionInfo = {
 
 export type SectionInfo = {
     title: string;
+    dependencies: Array<string>;
     flatworm: string;
     objs: Array<SubsectionInfo | Export>;
     anchor: string | null;
+}
+*/
+
+export class _ApiSection<T> {
+    #anchor: null | string;
+    #flatworm: string;
+    #title: string;
+
+    // @todo: rename to subsections
+    objs: Array<T>;
+
+    constructor(title?: string, flatworm?: string, anchor?: string) {
+        this.#title = title;
+        this.#flatworm = flatworm || "";
+        this.#anchor = anchor || null;
+        this.objs = [ ];
+    }
+
+    get anchor(): string { return this.#anchor; }
+    get flatworm(): string { return this.#flatworm; }
+    get title(): string { return this.#title; }
+
+    _addObject(item: T): void {
+        this.objs.push(item);
+    }
+
+    // @TODO: should these throw if already set?
+    _setFlatworm(flatworm: string): void { this.#flatworm = flatworm; }
+    _setTitle(title: string): void { this.#title = title; }
+    _setAnchor(anchor: string): void { this.#anchor = anchor; }
+}
+
+export class ApiSubsection extends _ApiSection<Export>{
+    _addExport(ex: Export): void { super._addObject(ex); }
+}
+
+export class ApiSection extends _ApiSection<ApiSubsection | Export> {
+    readonly dependencies: Array<string>;
+
+    constructor(title?: string, flatworm?: string, anchor?: string) {
+        super(title, flatworm, anchor);
+        this.dependencies = [ ];
+    }
+
+    _addSubsection(subsection: ApiSubsection | Export): void {
+        super._addObject(subsection);
+    }
+
+    _addDependency(dep: string): void {
+        if (this.dependencies.indexOf(dep) >= 0) { return; }
+        this.dependencies.push(dep);
+    }
 }
 
 export class API {
     readonly basePath: string;
     readonly objs: Array<Export>;
 
-    readonly toc: Map<string, SectionInfo>;
+    readonly toc: Map<string, ApiSection>;
 
     getExport(name: string): Export {
         const matches = this.objs.filter((e) => (e.name === name));
@@ -1392,7 +1448,7 @@ export class API {
             }
         }
 
-        const toc: Map<string, SectionInfo> = new Map();
+        const toc: Map<string, ApiSection> = new Map();
         const remaining: Map<string, Export> = new Map();
 
         const specific: Array<{ docloc: string, obj: Export }> = [ ];
@@ -1415,37 +1471,48 @@ export class API {
             if (!("_subsection" in docTags)) { continue; }
 
             const { anchor, path, title } = splitDocloc(docTags["_subsection"][0]);
-            let objs: Array<Export> = [ ];
-            const subsection = { anchor, title, flatworm, objs };
-            if (!toc.has(path)) {
-                toc.set(path, { anchor: null, title: "", flatworm: "", objs: [ subsection ] });
-            } else {
-                const section = toc.get(path);
 
-                let found: null | SubsectionInfo = null;
+            let subsection: ApiSubsection;
+
+            let section = toc.get(path)
+
+            if (!section) {
+                subsection = new ApiSubsection(title, flatworm, anchor);
+
+                section = new ApiSection("", flatworm, null);
+                section._addSubsection(subsection);
+
+                section._addDependency(this.resolve(filename));
+
+                toc.set(path, section);
+
+            } else {
+                section._addDependency(this.resolve(filename));
+
                 for (const obj of section.objs) {
                     if (obj instanceof Export) { continue; }
                     if (obj.anchor === anchor) {
-                        found = obj;
+                        subsection = obj;
                         break;
                     }
                 }
 
-                if (found) {
-                    objs = found.objs;
-                    if (found.flatworm.trim() === "") {
-                        found.flatworm = flatworm;
+                if (subsection) {
+                    if (subsection.flatworm.trim() === "") {
+                        subsection._setFlatworm(flatworm);
                     } else if (flatworm.trim() !== "") {
                         throw new Error("cannot merge subsection info");
                     }
                 } else {
+                    subsection = new ApiSubsection(title, flatworm, anchor);
+
                     section.objs.push(subsection);
                 }
             }
 
             for (const ex of exports) {
                 if (!remaining.has(ex)) { continue; }
-                objs.push(remaining.get(ex));
+                subsection._addExport(remaining.get(ex));
                 remaining.delete(ex);
             }
         }
@@ -1458,17 +1525,25 @@ export class API {
 
             const { anchor, path, title } = splitDocloc(docTags["_section"][0]);
 
-            if (!toc.has(path)) {
-                toc.set(path, { anchor, title, flatworm, objs: [ ] });
+            let section = toc.get(path);
+
+            if (!section) {
+                section = new ApiSection(title, flatworm, anchor);
+                toc.set(path, section);
+
+                section._addDependency(this.resolve(filename));
+
             } else {
-                toc.get(path).anchor = anchor;
-                toc.get(path).title = title;
-                toc.get(path).flatworm = flatworm;
+                section._addDependency(this.resolve(filename));
+
+                section._setAnchor(anchor);
+                section._setTitle(title);
+                section._setFlatworm(flatworm);
             }
 
             for (const ex of exports) {
                 if (!remaining.has(ex)) { continue; }
-                toc.get(path).objs.push(remaining.get(ex));
+                section._addSubsection(remaining.get(ex));
                 remaining.delete(ex);
             }
         }
@@ -1483,9 +1558,12 @@ export class API {
                 throw new Error(`no matching section ${ JSON.stringify(docloc) }`);
             }
 
+            section._addDependency(this.resolve(obj.filename));
+
             if (!title) {
                 // Add to the section
                 section.objs.push(obj);
+
             } else {
                 // Add to a specific subsection
                 let objs: null | Array<Export> = null;
@@ -1506,14 +1584,17 @@ export class API {
 
         // Add the remaining objects to the root? Or other?
         if (remaining.size > 0) {
-            let objs: Array<Export | SubsectionInfo> = [ ]
-            if (!toc.has("api")) {
-                toc.set("api", { anchor: null, title: "API", flatworm: "Applcation Programming Interface", objs });
-            } else {
-                objs = toc.get("api").objs;
+            let section = toc.get("api");
+            if (!section) {
+                section = new ApiSection("API", "Application Programming Interface");
+                toc.set("api", section);
             }
+
+
             for (const [ , obj ] of remaining) {
-                objs.push(obj);
+                section._addSubsection(obj);
+
+                section._addDependency(this.resolve(obj.filename));
             }
         }
 
@@ -1555,6 +1636,10 @@ export class API {
 
             this.toc = toc;
         }
+    }
+
+    resolve(...args: Array<string>): string {
+        return resolve(dirname(this.basePath), ...args);
     }
 
     async evaluate(config: Config): Promise<void> {

@@ -17,6 +17,8 @@ export class Config {
     readonly codeRoot: string;
     readonly links: Map<string, { title: string, link: string, style: string }>;
 
+    #getTimestamp: null | ((path: string) => Promise<null | number>);
+
     constructor(root: string, config: any) {
         this.root = dirname(root);
         this.title = config.title || "no title";
@@ -26,6 +28,8 @@ export class Config {
         this.staticFiles = (config.staticFiles || [ ]);
         this.docRoot = this.resolve(config.docRoot || ".");
         this.codeRoot = this.resolve(config.codeRoot || "..");
+
+        this.#getTimestamp = config.getTimestamp || null;
 
         if (typeof(config.contextify) === "function") {
              this.contextify = config.contextify;
@@ -38,6 +42,15 @@ export class Config {
             const lines = fs.readFileSync(this.resolve(linkFile)).toString().split("\n");
             this.#addLinks(lines);
         }
+    }
+
+    async getTimestamp(path: string): Promise<null | number> {
+        if (this.#getTimestamp) {
+            return await this.#getTimestamp(path);
+        }
+        const stat = fs.statSync(path, { throwIfNoEntry: false });
+        if (stat) { return stat.mtimeMs; }
+        return null;
     }
 
     #addLinks(lines: Array<string>): void {
@@ -57,6 +70,14 @@ export class Config {
 
     resolve(...args: Array<string>): string {
         return resolve(this.root, ...args);
+    }
+
+    resolveDoc(...args: Array<string>): string {
+        return resolve(this.root, this.docRoot, ...args);
+    }
+
+    resolveCode(...args: Array<string>): string {
+        return resolve(this.root, dirname(this.codeRoot), ...args);
     }
 
     static async fromScript(path: string): Promise<Config> {

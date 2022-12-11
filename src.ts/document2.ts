@@ -78,12 +78,20 @@ export class Section extends Fragment {
     readonly body: Array<Content>;
     readonly subsections: Array<Subsection>
 
-    constructor(value: string, path: string) {
+    readonly filename: null | string;
+
+    constructor(value: string, path: string, filename?: string) {
         super("section", value);
         this.path = path;
+        this.filename = (filename != null) ? filename: null;
 
         this.body = [ ];
         this.subsections = [ ];
+    }
+
+    get dependencies(): Array<string> {
+        if (this.filename) { return [ this.filename ]; }
+        return [ ];
     }
 
     get priority(): number {
@@ -92,7 +100,7 @@ export class Section extends Fragment {
         return parseInt(priority);
     }
 
-    static fromContent(anchor: string, content: string): Section {
+    static fromContent(anchor: string, content: string, filename?: string): Section {
         let section: null | Section = null;
         let subsection: null | Subsection = null;
 
@@ -109,7 +117,7 @@ export class Section extends Fragment {
 
             if (tag === "section") {
                 if (section != null) { throw new Error("duplicate section"); }
-                section = new Section(value, anchor);
+                section = new Section(value, anchor, filename);
                 section.body.push(Content.nullContent(content));
 
             } else if (tag === "subsection") {
@@ -247,7 +255,7 @@ export class Document {
                        anchor = anchor.substring(0, anchor.length - 4);
                     }
                     const content = fs.readFileSync(filename).toString();
-                    doc.sections.push(Section.fromContent(anchor, content));
+                    doc.sections.push(Section.fromContent(anchor, content, filename));
                 }
             }
         };

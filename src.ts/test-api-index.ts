@@ -21,10 +21,9 @@ import {
     ObjectExport, ReturnsExport,
     TypeExport,
     Type, TypeBasic, TypeFunction, TypeIdentifier, TypeGroup,
-    TypeLiteral, TypeMapping, TypeTodo, TypeWrapped
+    TypeLiteral, TypeMapping, TypeTodo, TypeWrapped,
+    ApiSection, ApiSubsection
 } from "./jsdocs.js";
-
-import type { SectionInfo, SubsectionInfo } from "./jsdocs.js";
 
 export type IndexEntryType = "class" | "constant" | "function" |
     "method" | "property" | "static_method" | "type" | "other";
@@ -449,7 +448,7 @@ function addSection(output: Array<string>, links: LinkMap, section: Section): vo
     }
 }
 
-function addSectionInfo(output: Array<string>, links: LinkMap, section: SectionInfo): void {
+function addSectionInfo(output: Array<string>, links: LinkMap, section: ApiSection): void {
     const anchor = links.get(section.anchor);
     output.push(`<div class="show-links">`);
     if (anchor) {
@@ -463,7 +462,7 @@ function addSectionInfo(output: Array<string>, links: LinkMap, section: SectionI
     output.push(`</div>`);
 }
 
-function addFooter(output: Array<string>, previous: null | TocEntry, next: null | TocEntry): void {
+function addFooter(output: Array<string>, previous: null | TocEntry, next: null | TocEntry, genDate: string): void {
     output.push(`<div class="footer"><div class="nav"><div class="clearfix"></div>`);
     if (previous) {
         output.push(`<div class="previous"><a href="${ previous.link }"><span class="arrow">&larr;</span>&nbsp;${ previous.title }</a></div>`);
@@ -471,7 +470,7 @@ function addFooter(output: Array<string>, previous: null | TocEntry, next: null 
     if (next) {
         output.push(`<div class="next"><a href="${ next.link }">${ next.title }<span class="arrow">&rarr;</span></a></div>`);
     }
-    output.push(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on DATE HERE.</div></div>`);
+    output.push(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ genDate }.</div></div>`);
     output.push(`</div><script type="module" src="./script-all.js"></script></body></html>`);
 }
 
@@ -692,7 +691,7 @@ export type TocEntry = {
 };
 
 // @TODO: remove api; supers is on obj
-function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | SubsectionInfo>): Array<TocEntry> {
+function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | ApiSubsection>): Array<TocEntry> {
     const toc = [ ];
 
     // Show all types
@@ -750,6 +749,36 @@ function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array
     return toc;
 }
 
+const Months = [
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"
+];
+
+function getTimestamp(value: number): string {
+    const now = new Date(value);
+
+    let hours = now.getHours();
+    let meridian = "am";
+    if (hours >= 12) {
+        hours -= 12;
+        meridian = "pm";
+    } else if (hours === 0) {
+        hours = 12;
+    }
+
+    let minutes = String(now.getMinutes());
+    if (minutes.length < 2) { minutes = "0" + minutes; }
+
+    return [
+        Months[now.getMonth()], " ",
+        now.getDate(), ", ",
+        now.getFullYear(), ", ",
+        hours, ":",
+        minutes,
+        meridian
+    ].join("");
+}
+
 export async function generate(api: API, config: Config) {
     const BASE_URL = config.srcBaseUrl;
 
@@ -760,7 +789,7 @@ export async function generate(api: API, config: Config) {
 // @TODO: use obj.id
     const links = config.links;
 
-    const addLink = (filename: string, obj: Export | SubsectionInfo) => {
+    const addLink = (filename: string, obj: Export | ApiSubsection) => {
         if (obj instanceof ObjectExport) {
             links.set(obj.name, {
                 link: `${ filename }#${ obj.name }`,
@@ -866,11 +895,13 @@ export async function generate(api: API, config: Config) {
             }
         }
     };
-    
 
-    const mainToc: Array<{ path: string, entry: TocEntry, section: Section | SectionInfo }> = [ ];
+    const mainToc: Array<{ path: string, entry: TocEntry, section: Section | ApiSection }> = [ ];
+
+    const now = (new Date()).getTime();
 
     for (const section of doc.sections) {
+
         //if (section.path === "") { continue; }
         const title = section.title;
         const filename = join("/", config.prefix, section.path + "/");
@@ -919,6 +950,7 @@ export async function generate(api: API, config: Config) {
 
             links.set(section.anchor, entry);
         }
+
         for (const obj of section.objs) {
             addLink(filename, obj);
         }
@@ -930,7 +962,6 @@ export async function generate(api: API, config: Config) {
         }
         return accum;
     }, <Map<string, number>>(new Map()));
-console.log("PRIO", pris);
 
     mainToc.sort((a, b) => {
         const compsA = a.entry.link.split("#")[0].split("/");
@@ -960,6 +991,26 @@ console.log("PRIO", pris);
         }
         return compsA.length - compsB.length;
     });
+
+    const tsCache: Map<string, number> = new Map();
+    const getTs = async (path: string) => {
+        let ts = tsCache.get(path);
+        if (ts == null) {
+            ts = await config.getTimestamp(path);
+            if (ts == null) { ts = -1; }
+            tsCache.set(path, ts);
+        }
+        return ts;
+    };
+    const getGenDate = async function(deps: Array<string>) {
+        let latest = -1;
+        for (const dep of deps) {
+            const ts = await getTs(dep);
+            if (ts > latest) { latest = ts; }
+        }
+        if (latest === -1) { return now; }
+        return latest;
+    };
 
     for (let i = 0; i < mainToc.length; i++) {
         const { path, section } = mainToc[i];
@@ -993,7 +1044,7 @@ console.log("PRIO", pris);
             const { entry, section } = mainToc[i + 1];
             nextEntry = { link: entry.link, title: section.title, style: "normal" };
         }
-        addFooter(output, previousEntry, nextEntry);
+        addFooter(output, previousEntry, nextEntry, getTimestamp(await getGenDate(section.dependencies)));
 
         const filename = resolve("output/docs", config.prefix, path, "index.html");
         fs.mkdirSync(dirname(filename), { recursive: true });
@@ -1010,6 +1061,12 @@ console.log("PRIO", pris);
         "lato/Lato-BlackItalic.ttf",
         "lato/OFL.txt",
         "lato/README.txt",
+
+        "liberation/LiberationMono-Italic.ttf",
+        "liberation/LiberationMono-Bold.ttf",
+        "liberation/LiberationMono-Regular.ttf",
+        "liberation/LiberationMono-BoldItalic.ttf",
+
 //        "search.js",
 //        "script.js",
         "style-v2.css"
