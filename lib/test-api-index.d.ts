@@ -22,6 +22,7 @@ export declare class IndexGroup {
 export declare function getIndex(api: API): Array<IndexGroup>;
 export declare function generateIndex(api: API): void;
 export declare type TocEntry = {
+    path: string;
     link: string;
     style: string;
     title: string;

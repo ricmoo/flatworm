@@ -181,6 +181,16 @@ body {
   color: #aac;
 }
 
+.breadcrumbs {
+  font-style: italic;
+}
+
+.breadcrumbs .symbol {
+  font-weight: bold;
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
 .content {
   padding: 40px 0 50px;
   margin-left: 310px;
@@ -192,8 +202,8 @@ body {
 }
 
 .footer .nav {
-  border-bottom: 1px solid #888;
-  border-top: 1px solid #888;
+  border-bottom: 1px solid #aaa;
+  border-top: 1px solid #aaa;
   padding: 15px 0;
   position: relative;
 }
@@ -245,7 +255,7 @@ body {
 }
 
 .content .section-title {
-  border-top: 2px solid #888;
+  border-top: 1px solid #aaa;
   color: #000;
   font-size: 175%;
   font-weight: bold;
@@ -255,7 +265,7 @@ body {
 }
 
 .content .title {
-  border-top: 3px solid #888;
+  border-top: 2px solid #444;
   color: #444;
   font-size: 150%;
   font-weight: bold;
@@ -550,7 +560,7 @@ a.link.source {
 }
 
 a.link.source {
-  ddd-font-size: 18px;
+  font-size: 70%;
   font-family: "Liberation", monospace;
   font-weight: bold;
   right: 0px;

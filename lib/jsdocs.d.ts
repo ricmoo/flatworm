@@ -139,8 +139,13 @@ export declare class ApiSubsection extends _ApiSection<Export> {
     _addExport(ex: Export): void;
 }
 export declare class ApiSection extends _ApiSection<ApiSubsection | Export> {
+    #private;
     readonly dependencies: Array<string>;
     constructor(title?: string, flatworm?: string, anchor?: string);
+    get navTitle(): string;
+    _setNavTitle(nav: string): void;
+    get path(): string;
+    _setPath(path: string): void;
     _addSubsection(subsection: ApiSubsection | Export): void;
     _addDependency(dep: string): void;
 }
