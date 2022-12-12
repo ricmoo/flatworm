@@ -1029,7 +1029,6 @@ export async function generate(api: API, config: Config) {
     };
     const getGenDate = async function(deps: Array<string>) {
         let latest = -1;
-        console.log("DEPS", deps);
         for (const dep of deps) {
             const ts = await getTs(dep);
             if (ts > latest) { latest = ts; }
@@ -1073,7 +1072,6 @@ export async function generate(api: API, config: Config) {
             const { entry, section } = mainToc[i + 1];
             nextEntry = { link: entry.link, title: section.title };
         }
-        console.log("PPP", path);
         addFooter(output, previousEntry, nextEntry, getTimestamp(await getGenDate(section.dependencies)));
 
         const filename = resolve("output/docs", config.prefix, path, "index.html");
