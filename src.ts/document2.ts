@@ -100,6 +100,12 @@ export class Section extends Fragment {
         return parseInt(priority);
     }
 
+    get navTitle(): string {
+        const nav = this.getExtension("nav");
+        if (nav == null) { return this.title; }
+        return nav;
+    }
+
     static fromContent(anchor: string, content: string, filename?: string): Section {
         let section: null | Section = null;
         let subsection: null | Subsection = null;
@@ -250,9 +256,11 @@ export class Document {
                     let anchor = relative(config.docRoot, filename);
                     if (anchor.endsWith("index.wrm")) {
                         anchor = anchor.substring(0, anchor.length - 9);
-                        //if (anchor !== "/") { anchor = "/" + anchor; }
                     } else {
                        anchor = anchor.substring(0, anchor.length - 4);
+                    }
+                    if (anchor[anchor.length - 1] === "/") {
+                        anchor = anchor.substring(0, anchor.length - 1);
                     }
                     const content = fs.readFileSync(filename).toString();
                     doc.sections.push(Section.fromContent(anchor, content, filename));

@@ -1224,10 +1224,33 @@ export class ApiSubsection extends _ApiSection<Export>{
 export class ApiSection extends _ApiSection<ApiSubsection | Export> {
     readonly dependencies: Array<string>;
 
+    #path: null | string;
+    #navTitle: null | string;
+
     constructor(title?: string, flatworm?: string, anchor?: string) {
         super(title, flatworm, anchor);
         this.dependencies = [ ];
+        this.#path = ""
+        this.#navTitle = null;
     }
+
+    get navTitle(): string {
+        if (this.#navTitle) { return this.#navTitle; }
+        return this.title;
+    }
+
+    _setNavTitle(nav: string): void {
+        this.#navTitle = nav;
+    }
+
+    get path(): string {
+        if (this.#path == null) {
+            throw new Error(`no path set for ${ this.anchor }`);
+        }
+        return this.#path;
+    }
+
+    _setPath(path: string): void { this.#path = path; }
 
     _addSubsection(subsection: ApiSubsection | Export): void {
         super._addObject(subsection);
@@ -1485,6 +1508,7 @@ export class API {
                 section._addDependency(this.resolve(filename));
 
                 toc.set(path, section);
+                section._setPath(path);
 
             } else {
                 section._addDependency(this.resolve(filename));
@@ -1530,11 +1554,19 @@ export class API {
             if (!section) {
                 section = new ApiSection(title, flatworm, anchor);
                 toc.set(path, section);
+                section._setPath(path);
+                if ("_navTitle" in docTags) {
+                    section._setNavTitle(docTags["_navTitle"][0]);
+                }
 
                 section._addDependency(this.resolve(filename));
 
             } else {
                 section._addDependency(this.resolve(filename));
+
+                if ("_navTitle" in docTags) {
+                    section._setNavTitle(docTags["_navTitle"][0]);
+                }
 
                 section._setAnchor(anchor);
                 section._setTitle(title);
@@ -1588,6 +1620,7 @@ export class API {
             if (!section) {
                 section = new ApiSection("API", "Application Programming Interface");
                 toc.set("api", section);
+                section._setPath("api");
             }
 
 
@@ -1597,8 +1630,6 @@ export class API {
                 section._addDependency(this.resolve(obj.filename));
             }
         }
-
-        console.log("TOC");
 
         // Sort all the TOC entries
         const sorted = Array.from(toc.keys());

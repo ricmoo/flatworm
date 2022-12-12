@@ -396,7 +396,10 @@ function showType(type: Type, links: LinkMap): string {
 };
 
 
-function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: Array<TocEntry>): void {
+function addHeader(config: Config, output: Array<string>, section: ApiSection | Section, links: LinkMap, _toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): void {
+    // Remove the root "documentation" node and get just the entries
+    const toc = _toc.filter((e) => (!!e.path)).map((e) => e.entry);
+
     output.push(`<html><head>`);
     output.push(`<link rel="stylesheet" href="/${ config.prefix }/static/style-v2.css">`);
     output.push(`<meta property="og:title" content="Documentation">`);
@@ -422,8 +425,23 @@ function addHeader(config: Config, output: Array<string>, links: LinkMap, toc: A
         output.push(`<div class="depth-${ countDepth(entry.link) - minDepth}"><a href="${ entry.link }">${ entry.title }</a></div>`);
     }
     output.push(`</div></div>`);
-    output.push(`<div class="content"><div class="breadcrums">`);
-    output.push(`<i>Documentation</i>`);
+    output.push(`<div class="content"><div class="breadcrumbs">`);
+
+    // The breadcrumbs; but on the root drop the empty string
+    // since the root is always included
+    const breadcrumbs = section.path.split("/").filter(Boolean);
+
+    for (let i = 0; i <= breadcrumbs.length; i++) {
+        const path = breadcrumbs.slice(0, i).join("/");
+        const entry = _toc.filter((e) => (e.path === path)).pop();
+        if (i !== breadcrumbs.length) {
+            if (entry == null) { continue; }
+            output.push(`<a href="/${ config.prefix }/${ path }/">${ entry.section.navTitle }</a> <span class="symbol">&raquo;</span>`);
+        } else {
+            output.push(`<i>${ section.title }</i>`);
+        }
+    }
+
     output.push(`</div>`);
 }
 
@@ -462,7 +480,7 @@ function addSectionInfo(output: Array<string>, links: LinkMap, section: ApiSecti
     output.push(`</div>`);
 }
 
-function addFooter(output: Array<string>, previous: null | TocEntry, next: null | TocEntry, genDate: string): void {
+function addFooter(output: Array<string>, previous: null | NavEntry, next: null | NavEntry, genDate: string): void {
     output.push(`<div class="footer"><div class="nav"><div class="clearfix"></div>`);
     if (previous) {
         output.push(`<div class="previous"><a href="${ previous.link }"><span class="arrow">&larr;</span>&nbsp;${ previous.title }</a></div>`);
@@ -540,9 +558,9 @@ function addReturnsExport(output: Array<string>, links: LinkMap, obj: ReturnsExp
 }
 
 // @TODO: remove API since supers exists on obj
-function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: ObjectExport): TocEntry {
+function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: ObjectExport): Omit<TocEntry, "path"> {
     const name = obj.name;
-    const toc: TocEntry = { link: `#${ name }`, title: name, style: "code" };
+    const toc: Omit<TocEntry, "path"> = { link: `#${ name }`, title: name, style: "code" };
 
     const links = new Map(_links);
     for (const [ name, ] of obj.methods) {
@@ -684,14 +702,20 @@ function addTypeExport(output: Array<string>, links: LinkMap, obj: TypeExport): 
     output.push("</div>");
 }
 
+type NavEntry = {
+    link: string,
+    title: string
+};
+
 export type TocEntry = {
+    path: string;
     link: string;
     style: string;
     title: string;
 };
 
 // @TODO: remove api; supers is on obj
-function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | ApiSubsection>): Array<TocEntry> {
+function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | ApiSubsection>): Array<Omit<TocEntry, "path">> {
     const toc = [ ];
 
     // Show all types
@@ -907,7 +931,7 @@ export async function generate(api: API, config: Config) {
         const filename = join("/", config.prefix, section.path + "/");
         mainToc.push({
             path: section.path,
-            entry: { link: filename, style: "normal", title },
+            entry: { path: section.path, link: filename, style: "normal", title },
             section
         });
 
@@ -934,7 +958,7 @@ export async function generate(api: API, config: Config) {
     for (const [ path, section ] of toc) {
         const filename = join("/", config.prefix, path + "/");
 
-        const entry = { link: filename, style: "normal", title: section.title };
+        const entry = { path, link: filename, style: "normal", title: section.title };
         mainToc.push({ path, entry, section });
 
         if (section.anchor) {
@@ -1017,7 +1041,7 @@ export async function generate(api: API, config: Config) {
         const { path, section } = mainToc[i];
 
         const output: Array<string> = [ ];
-        addHeader(config, output, links, mainToc.filter(e => !!e.path).map(e => e.entry));
+        addHeader(config, output, section, links, mainToc);
 
         if (section instanceof Section) {
             addSection(output, links, section);
@@ -1025,6 +1049,9 @@ export async function generate(api: API, config: Config) {
         } else {
             addSectionInfo(output, links, section);
             const localToc = addExports(api, [ ], links, section.objs);
+            /*.map((e) => {
+                
+            });*/
 
             output.push(`<ul class="toc">`)
             for (const entry of localToc) {
@@ -1035,15 +1062,15 @@ export async function generate(api: API, config: Config) {
             addExports(api, output, links, section.objs);
         }
 
-        let previousEntry: null | TocEntry = null;
-        let nextEntry: null | TocEntry = null;
+        let previousEntry: null | NavEntry = null;
+        let nextEntry: null | NavEntry = null;
         if (mainToc[i - 1]) {
             const { entry, section } = mainToc[i - 1];
-            previousEntry = { link: entry.link, title: section.title, style: "normal" };
+            previousEntry = { link: entry.link, title: section.title };
         }
         if (mainToc[i + 1]) {
             const { entry, section } = mainToc[i + 1];
-            nextEntry = { link: entry.link, title: section.title, style: "normal" };
+            nextEntry = { link: entry.link, title: section.title };
         }
         console.log("PPP", path);
         addFooter(output, previousEntry, nextEntry, getTimestamp(await getGenDate(section.dependencies)));
