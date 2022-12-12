@@ -128,10 +128,10 @@ function _getType(node: Node): Type {
         case "TSTypeLiteral": {
             const children = node.members.reduce((accum: Record<string, Type>, m: any) => {
                 if (m.type === "TSPropertySignature") {
-                    const name = getId(m.key); accum[name] =
-                    getType(m.typeAnnotation);
+                    const name = getId(m.key) + (m.optional ? "?": "");
+                    accum[name] = getType(m.typeAnnotation);
                 } else if (m.type === "TSMethodSignature") {
-                    const name = getId(m.key);
+                    const name = getId(m.key) + (m.optional ? "?": "");
                     accum[name] = getType(m.typeAnnotation);
                 } else if (m.type === "TSIndexSignature") {
                     if (m.parameters.length !== 1) {
