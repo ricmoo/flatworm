@@ -99,7 +99,8 @@ function renderContents(contents: Array<Content>, links: LinkMap): string {
         if (content instanceof BodyContent) {
             output.push(`<div><p>${ renderNodes(content.body, links) }</p></div>`);
         } else if (content instanceof CodeContent) {
-            output.push(`<div class="code-block">${ content.source }</div>`);
+            addExample(output, content.script);
+            //output.push(`<div class="code-block">${ content.content }</div>`);
         } else {
             throw new Error("not implemented");
         }
@@ -396,9 +397,135 @@ function showType(type: Type, links: LinkMap): string {
 };
 
 
-function addHeader(config: Config, output: Array<string>, section: ApiSection | Section, links: LinkMap, _toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): void {
+type _TocOffset = { depth: number, start: number, end: number };
+type _LocalTocEntry = {
+    depth: number,
+    link: string,
+    title: string,
+    selected?: boolean,
+    highlit?: boolean,
+    hidden?: boolean,
+    current?: boolean
+};
+
+function prepareLocalToc(path: string, toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): Array<_LocalTocEntry> {
+    const countDepth = (value: string) => {
+        return (value.split("/").length - 1) + (value.split("#").length - 1);
+    };
+
+    const result: Array<_LocalTocEntry> = [ ];
+
+    // Get all the TOC entries
+    let current = -1;
+    {
+        let minDepth = -1, i = 0;
+        for (const { entry } of toc) {
+
+            // Ignore the root
+            if (!entry.path) { continue; }
+
+            // Get the depth and track the minimum depth
+            const depth = countDepth(entry.link);
+            if (minDepth === -1 || depth < minDepth) { minDepth = depth; }
+
+            // Found the current entry
+            if (path === entry.path) { current = i; }
+            i++
+
+            const { link, title } = entry;
+            result.push({ depth, link, title });
+        }
+
+        // Adjust the depth based on the minimum depth
+        result.forEach((e) => { e.depth -= minDepth });
+    }
+
+    const hideGrandkids = function(offset: _TocOffset) {
+        for (let i = offset.start; i < offset.end; i++) {
+            if (result[i].depth > offset.depth + 1) {
+                result[i].hidden = true;
+            }
+        }
+    }
+
+    if (current === -1) {
+        hideGrandkids({ depth: -1, start: 0, end: result.length });
+
+        // Remove all hidden entries
+        return result.filter((e) => (!e.hidden));
+    }
+
+    result[current].current = true;
+
+    // Get all ancestor sections (including yourself)
+    const ancestors: Array<number> = [ current ];
+    {
+        let depth = result[current].depth;
+        for (let i = current; i >= 0; i--) {
+            if (result[i].depth < depth) {
+                ancestors.push(i);
+                depth--;
+            }
+        }
+    }
+
+    // Remove the nieces
+    const hideNieces = function(myself: number, offset: _TocOffset) {
+
+        // Find all siblings for myself in the range
+        const siblings: Array<number> = [ ];
+        for (let i = offset.start; i < offset.end; i++) {
+            if (result[i].depth === result[myself].depth) { siblings.push(i); }
+        }
+        siblings.push(offset.end);
+
+        // No siblings
+        if (siblings.length === 1) { return offset; }
+
+        offset = { depth: -1, start: -1, end: -1 };
+
+        for (let i = 1; i < siblings.length; i++) {
+            const start = siblings[i - 1], end = siblings[i];
+
+            // This is the direct anscestor for this depth; mark it selected
+            if (myself >= start && myself < end) {
+                result[start].selected = true;
+                offset = { depth: result[myself].depth, start, end };
+                continue;
+            }
+
+            // It's a niece; hide it
+            for (let j = start + 1; j < end; j++) {
+                result[j].hidden = true;
+            }
+        }
+
+        return offset;
+    };
+
+    // Hide all nieces of all ancestors
+    const root = hideNieces(ancestors.pop(), { depth: 0, start: 0, end: result.length });
+    {
+        // Remove each ancestor's nieces, starting with the oldest
+        let offset = root;
+        while (ancestors.length && offset.depth !== -1) {
+            offset = hideNieces(ancestors.pop(), offset);
+        }
+
+        for (let i = root.start; i < root.end; i++) {
+            result[i].highlit = true;
+        }
+
+        if (offset.depth !== -1) { hideGrandkids(offset); }
+    }
+
+    // Remove all hidden entries
+    return result.filter((e) => (!e.hidden));
+}
+
+function addHeader(api: API, config: Config, output: Array<string>, section: ApiSection | Section, links: LinkMap, toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): void {
     // Remove the root "documentation" node and get just the entries
-    const toc = _toc.filter((e) => (!!e.path)).map((e) => e.entry);
+    //const toc = _toc.filter((e) => (!!e.path)).map((e) => e.entry);
 
     output.push(`<html><head>`);
     output.push(`<link rel="stylesheet" href="/${ config.prefix }/static/style-v2.css">`);
@@ -411,18 +538,27 @@ function addHeader(config: Config, output: Array<string>, section: ApiSection | 
     output.push(`<a class="logo" href="/${ config.prefix }/"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
     output.push(`</div><div class="toc">`);
     output.push(`<div class="title"><a href="/${ config.prefix }/">DOCUMENTATION</a></div>`);
-    const countDepth = (value: string) => {
-        return (value.split("/").length - 1) + (value.split("#").length - 1);
-    };
 
-    const minDepth = toc.reduce((accum, e) => {
-        const depth = countDepth(e.link);
-        if (accum === -1 || depth < accum) { return depth; }
-        return accum;
-    }, <number>(-1));
-
-    for (const entry of toc) {
-        output.push(`<div class="depth-${ countDepth(entry.link) - minDepth}"><a href="${ entry.link }">${ entry.title }</a></div>`);
+    for (const { depth, link, title, current, selected, highlit } of prepareLocalToc(section.path, toc)) {
+        output.push(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }"><a href="${ link }">${ title }</a></div>`);
+        if (!current) { continue; }
+        if (section instanceof ApiSection) {
+            const subToc = addExports(api, [ ], links, section.objs);
+            for (let i = 0; i < subToc.length; i++) {
+                const { link, title } = subToc[i];
+                const dedent = (i === (subToc.length - 1)) ? " dedent": "";
+                output.push(`<div class="depth-${ depth + 1 } highlight sub${ dedent }"><a href="${ link }">${ title }</a></div>`);
+            }
+        } else {
+            const subs = section.subsections;
+            for (let i = 0; i < subs.length; i++) {
+                const sub = subs[i];
+                const anchor = links.get(sub.anchor);
+                if (anchor == null) { continue; }
+                const dedent = (i === (subs.length - 1)) ? " dedent": "";
+                output.push(`<div class="depth-${ depth + 1 } highlight sub${ dedent }"><a href="${ anchor.link }">${ sub.title }</a></div>`);
+            }
+        }
     }
     output.push(`</div></div>`);
     output.push(`<div class="content"><div class="breadcrumbs">`);
@@ -433,7 +569,7 @@ function addHeader(config: Config, output: Array<string>, section: ApiSection | 
 
     for (let i = 0; i <= breadcrumbs.length; i++) {
         let path = breadcrumbs.slice(0, i).join("/");
-        const entry = _toc.filter((e) => (e.path === path)).pop();
+        const entry = toc.filter((e) => (e.path === path)).pop();
         if (i !== breadcrumbs.length) {
             if (entry == null) { continue; }
             if (path !== "") { path += "/"; }
@@ -447,21 +583,26 @@ function addHeader(config: Config, output: Array<string>, section: ApiSection | 
 }
 
 function addSection(output: Array<string>, links: LinkMap, section: Section): void {
-//    const anchor = "";//links.get(section.anchor);
+    const anchor = section.anchor ? links.get(section.anchor): null;
     output.push(`<div class="show-links">`);
-//    if (anchor) {
-        //output.push(`<div class="section-title"><a class="link anchor" href="${ anchor.link }">&nbsp;</a>${ section.title }</div>`);
-//    } else {
+    if (anchor) {
+        output.push(`<div class="section-title"><a class="link anchor" href="${ anchor.link }"></a>${ renderNode(section.titleNode, links) }</div>`);
+    } else {
         output.push(`<div class="section-title">${ renderNode(section.titleNode, links) }</div>`);
-//    }
+    }
 
     output.push(`<div class="docs">${ renderContents(section.body, links) }</div>`);
 
     output.push(`</div>`);
 
     for (const subsection of section.subsections) {
-        output.push(`<div>`);
-        output.push(`<div class="title">${ renderNode(subsection.titleNode, links) }</div>`);
+        const anchor = subsection.anchor ? links.get(subsection.anchor): null;
+        output.push(`<div class="show-links">`);
+        if (anchor) {
+            output.push(`<div class="title"><a class="link anchor" name="${ subsection.anchor }" href="${ anchor.link }"></a>${ renderNode(subsection.titleNode, links) }</div>`);
+        } else {
+            output.push(`<div class="title">${ renderNode(subsection.titleNode, links) }</div>`);
+        }
         output.push(`<div class="docs">${ renderContents(subsection.contents, links) }</div>`);
         output.push(`</div>`);
     }
@@ -481,7 +622,7 @@ function addSectionInfo(output: Array<string>, links: LinkMap, section: ApiSecti
     output.push(`</div>`);
 }
 
-function addFooter(output: Array<string>, previous: null | NavEntry, next: null | NavEntry, genDate: string): void {
+function addFooter(config: Config, output: Array<string>, previous: null | NavEntry, next: null | NavEntry, genDate: string): void {
     output.push(`<div class="footer"><div class="nav"><div class="clearfix"></div>`);
     if (previous) {
         output.push(`<div class="previous"><a href="${ previous.link }"><span class="arrow">&larr;</span>&nbsp;${ previous.title }</a></div>`);
@@ -490,7 +631,7 @@ function addFooter(output: Array<string>, previous: null | NavEntry, next: null 
         output.push(`<div class="next"><a href="${ next.link }">${ next.title }<span class="arrow">&rarr;</span></a></div>`);
     }
     output.push(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ genDate }.</div></div>`);
-    output.push(`</div><script type="module" src="./script-all.js"></script></body></html>`);
+    output.push(`</div><script type="module" src="/${ config.prefix }/static/script-v2.js"></script></body></html>`);
 }
 
 function addExample(output: Array<string>, script: Script): void {
@@ -804,16 +945,34 @@ function getTimestamp(value: number): string {
     ].join("");
 }
 
-export async function generate(api: API, config: Config) {
+export async function generate(api: API, doc: Document, config: Config) {
     const BASE_URL = config.srcBaseUrl;
-
-    const doc = Document.fromConfig(config);
 
     const toc = api.toc;
 
 // @TODO: use obj.id
     const links = config.links;
+/*
+    for (const section of doc.sections) {
+        const anchor = section.anchor;
+        if (!anchor) { continue; }
+        links.set(section.anchor, {
+            link: section.path,
+            style: "normal",
+            title: section.title
+        });
 
+        for (const subsection of section.subsections) {
+            const anchor = subsection.anchor;
+            if (!anchor) { continue; }
+            links.set(section.anchor, {
+                link: `${ section.path }#${ anchor }`,
+                style: "normal",
+                title: section.title
+            });
+        }
+    }
+*/
     const addLink = (filename: string, obj: Export | ApiSubsection) => {
         if (obj instanceof ObjectExport) {
             links.set(obj.name, {
@@ -948,13 +1107,14 @@ export async function generate(api: API, config: Config) {
         for (const subsection of section.subsections) {
             if (!subsection.anchor) { continue; }
             if (links.has(subsection.anchor)) { throw new Error(`duplicate anchor: ${ subsection.anchor }`); }
-            links.set(section.anchor, {
+            links.set(subsection.anchor, {
                 link: `${ filename }#${ subsection.anchor }`,
                 style: "normal",
                 title: section.title
             });
         }
     }
+    console.log("Links", links);
 
     for (const [ path, section ] of toc) {
         const filename = join("/", config.prefix, path + "/");
@@ -1041,7 +1201,7 @@ export async function generate(api: API, config: Config) {
         const { path, section } = mainToc[i];
 
         const output: Array<string> = [ ];
-        addHeader(config, output, section, links, mainToc);
+        addHeader(api, config, output, section, links, mainToc);
 
         if (section instanceof Section) {
             addSection(output, links, section);
@@ -1072,7 +1232,7 @@ export async function generate(api: API, config: Config) {
             const { entry, section } = mainToc[i + 1];
             nextEntry = { link: entry.link, title: section.title };
         }
-        addFooter(output, previousEntry, nextEntry, getTimestamp(await getGenDate(section.dependencies)));
+        addFooter(config, output, previousEntry, nextEntry, getTimestamp(await getGenDate(section.dependencies)));
 
         const filename = resolve("output/docs", config.prefix, path, "index.html");
         fs.mkdirSync(dirname(filename), { recursive: true });
@@ -1096,7 +1256,7 @@ export async function generate(api: API, config: Config) {
         "liberation/LiberationMono-BoldItalic.ttf",
 
 //        "search.js",
-//        "script.js",
+//        "script-v2.js",
         "style-v2.css"
     ].forEach((_filename) => {
         const filename = resolve(__dirname, "../static", _filename);
@@ -1127,7 +1287,12 @@ export async function generate(api: API, config: Config) {
 (async function() {
     const path = resolve(process.argv[2]);
     const config = await Config.fromPath(path);
+
     const api = new API(config.codeRoot);
     await api.evaluate(config);
-    generate(api, config);
+
+    const doc = Document.fromConfig(config);
+    await doc.evaluate();
+
+    generate(api, doc, config);
 })();

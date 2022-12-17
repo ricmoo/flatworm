@@ -149,6 +149,7 @@ export class Script {
         while (lines.length && !lines[0].trim()) { lines.shift(); }
         while (lines.length && !lines[lines.length - 1].trim()) { lines.pop(); }
 
+        // Remove common leading whitespace from each line
         let spaces = lines.reduce((accum, line) => {
             if (line.trim() === "") { return accum; }
             const spaces = line.match(/^(\s*)/)[1].length;
@@ -176,6 +177,12 @@ export class Script {
         } else if (this.language === "script") {
             for (const line of this.#lines) {
                 const type = line.trim().startsWith("/\/") ? "comment": "code";
+                result.push({ line, type });
+            }
+
+        } else if (this.language === "shell") {
+            for (const line of this.#lines) {
+                const type = line.trim().startsWith("#") ? "comment": "code";
                 result.push({ line, type });
             }
 

@@ -6,8 +6,8 @@ import {
     parseBlock, parseMarkdown, StylesAll,
     TextNode
 } from "./markdown.js";
-
 import type { Node } from "./markdown.js";
+import { Script } from "./script2.js";
 
 
 type DirectiveInfo = {
@@ -106,6 +106,17 @@ export class Section extends Fragment {
         return nav;
     }
 
+    async evaluate(config: Config): Promise<void> {
+        for (const content of this.body) {
+            if (!(content instanceof CodeContent)) { continue; }
+            await content.evaluate(config);
+        }
+
+        for (const sub of this.subsections) {
+            await sub.evaluate(config);
+        }
+    }
+
     static fromContent(anchor: string, content: string, filename?: string): Section {
         let section: null | Section = null;
         let subsection: null | Subsection = null;
@@ -179,6 +190,13 @@ export class Subsection extends Fragment {
 
         this.contents = [ ];
     }
+
+    async evaluate(config: Config): Promise<void> {
+        for (const content of this.contents) {
+            if (!(content instanceof CodeContent)) { continue; }
+            await content.evaluate(config);
+        }
+    }
 }
 
 export abstract class Content extends Fragment {
@@ -212,6 +230,8 @@ export class BodyContent extends Content {
 export class CodeContent extends Content {
     source: string;
 
+    script: Script;
+
     constructor(value: string, source: string) {
         super("code", value);
 
@@ -219,11 +239,18 @@ export class CodeContent extends Content {
         while (lines.length && lines[0].trim() === "") { lines.shift(); }
         while (lines.length && lines[lines.length - 1].trim() === "") { lines.pop(); }
         this.source = lines.join("\n");
+
+        this.script = new Script(this.source, this.language);
     }
 
     get language(): string {
         return this.getExtension("lang");
     }
+
+    async evaluate(config: Config): Promise<void> {
+        await this.script.evaluate(config);
+    }
+
 }
 
 export class TableContent extends Content {
@@ -237,6 +264,12 @@ export class Document {
     constructor(config: Config) {
         this.config = config;
         this.sections = [ ];
+    }
+
+    async evaluate(): Promise<void> {
+        for (const section of this.sections) {
+            await section.evaluate(this.config);
+        }
     }
 
     static async fromPath(path: string): Promise<Document> {
