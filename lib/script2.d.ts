@@ -1,5 +1,5 @@
 import type { Config } from "./config2.js";
-export declare type ScriptLineType = "code" | "comment" | "result" | "error" | "placeholder" | "hidden" | "unknown";
+export declare type ScriptLineType = "code" | "comment" | "result" | "error" | "placeholder" | "hide" | "unknown";
 export declare type ScriptLine = {
     line: string;
     type: ScriptLineType;

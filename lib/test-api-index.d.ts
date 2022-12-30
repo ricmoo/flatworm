@@ -1,4 +1,5 @@
 import { Config } from "./config2.js";
+import { Document } from "./document2.js";
 import { API } from "./jsdocs.js";
 export declare type IndexEntryType = "class" | "constant" | "function" | "method" | "property" | "static_method" | "type" | "other";
 export declare type IndexEntry = {
@@ -27,4 +28,4 @@ export declare type TocEntry = {
     style: string;
     title: string;
 };
-export declare function generate(api: API, config: Config): Promise<void>;
+export declare function generate(api: API, doc: Document, config: Config): Promise<void>;

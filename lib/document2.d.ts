@@ -1,5 +1,6 @@
 import { Config } from "./config2.js";
 import type { Node } from "./markdown.js";
+import { Script } from "./script2.js";
 export declare abstract class Fragment {
     #private;
     readonly titleNode: Node;
@@ -18,11 +19,13 @@ export declare class Section extends Fragment {
     get dependencies(): Array<string>;
     get priority(): number;
     get navTitle(): string;
+    evaluate(config: Config): Promise<void>;
     static fromContent(anchor: string, content: string, filename?: string): Section;
 }
 export declare class Subsection extends Fragment {
     readonly contents: Array<Content>;
     constructor(value: string, anchor: string);
+    evaluate(config: Config): Promise<void>;
 }
 export declare abstract class Content extends Fragment {
     readonly tag: string;
@@ -36,8 +39,10 @@ export declare class BodyContent extends Content {
 }
 export declare class CodeContent extends Content {
     source: string;
+    script: Script;
     constructor(value: string, source: string);
     get language(): string;
+    evaluate(config: Config): Promise<void>;
 }
 export declare class TableContent extends Content {
 }
@@ -45,6 +50,7 @@ export declare class Document {
     readonly config: Config;
     readonly sections: Array<Section>;
     constructor(config: Config);
+    evaluate(): Promise<void>;
     static fromPath(path: string): Promise<Document>;
     static fromConfig(config: Config): Document;
 }
