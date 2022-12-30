@@ -6,7 +6,7 @@ import vm from "vm";
 import type { Config } from "./config2.js";
 
 export type ScriptLineType = "code" | "comment" | "result" | "error" |
-    "placeholder" | "hidden" | "unknown";
+    "placeholder" | "hide" | "unknown";
 
 export type ScriptLine = { line: string, type: ScriptLineType, lineNo: number };
 
@@ -219,11 +219,8 @@ export class Script {
                     line = line.trim();
                     const type = line.substring(3, line.indexOf(":"));
                     switch (type) {
-                        case "result": case "error":
+                        case "result": case "error": case "hide":
                             clumps.push({ code, type });
-                            break;
-                        case "setup":
-                            clumps.push({ code, type: "code" }); //@TODO: remove
                             break;
                         default:
                             throw new Error(`unknown tag: ${ type }`);
@@ -231,6 +228,9 @@ export class Script {
                     code = [ ];
 
                 } else {
+                    if (clumps.length && clumps[clumps.length - 1].type === "hide") {
+                        if (line.trim() === "") { continue; }
+                    }
                     code.push(line)
                 }
             }
@@ -242,7 +242,9 @@ export class Script {
 
         exec.push(ExecHeader);
         for (const { code, type } of clumps) {
-            exec.push(`_emit(${ JSON.stringify(code.join("\n")) }, "code");`)
+            if (type !== "hide") {
+                exec.push(`_emit(${ JSON.stringify(code.join("\n")) }, "code");`)
+            }
             if (type === "error" || type === "result") {
                 exec.push(`/\/ <Transformed>`);
                 exec.push(execTransform(code.join("\n"), type) + ";");
@@ -315,91 +317,4 @@ export class Script {
 
         return result;
     }
-
-
-                /*
-                code.forEach((line) => {
-                    const type = line.trim().startsWith("/\/") ? "comment": "code";
-                    result.push({ line, type });
-                });
-                const exec = await this.execute(setup + ";\n" + code.join("\n"), config);
-
-                if (exec.type !== type) {
-                    console.log("FOOBAR", { exec, type, code });
-                    throw new Error(`expected mismatch: ${ type } !== ${ exec.type } ${ exec.value }`);
-                }
-                result.push({ line: exec.value, type: <ScriptLineType>type })
-                */
-/*
-    async execute(code: string, config: Config): Promise<{ type: "error" | "result", value: string }> {
-
-        // Setup the script context
-        const contextObject: Record<string, any> = {
-            console: console,
-        };
-
-        const context = vm.createContext(contextObject);
-        if (config.contextify) { config.contextify(context); }
-
-        const setup = new vm.Script(ExecSetup, { filename: "setup.js" });
-        await setup.runInContext(context, { });
-
-        console.log("CODE:", code);
-        const transformed = babel.transform(code, {
-            plugins: [ { visitor: Transformer } ]
-        }).code;
-        const exec = Exec.replace("<CODE>", transformed);
-        console.log("EXEC:", exec);
-
-        const script = new vm.Script(exec, {
-            filename: (this.filename || "demo.js"),
-        });
-
-        let run: { sync: boolean, type: "error" | "result", value: any };
-        try {
-            run = await script.runInContext(context, { });
-        } catch (error) {
-            console.log("ERROR", error);
-            throw error;
-        }
-        const { sync, type, value } = run;
-        console.log("RESULT", { sync, type, value });
-
-        let result: string;
-        if (type === "result") {
-            result = inspect(value);
-
-        } else {
-            // Errors get pulled apart
-            result = `Error(${ JSON.stringify(value.message.match(/(^([^(]*))/)[0].trim()) }`;
-            const keys = Object.keys(value);
-            if (keys.length !== 0) {
-                result += `, {\n`;
-                for (const key of keys) {
-                   result += `  ${ key }: ${ JSON.stringify(value[key]) }\n`;
-                }
-                result += `}`;
-            }
-            result += `)`;
-        }
-
-        // If it was a promise, prefix it
-        if (!sync) { result = `Promise<${ result }>`; }
-
-        // Make it a comment
-        result = result.split("\n").map((l) => (`/\/ ${ l }`)).join("\n");
-
-        return { type, value: result };
-    }
-    */
 }
-            /*
-
-            let node;
-            if (path.node.type === "MemberExpression") {
-                node = babel.types.callExpression(callee, [ path.node, path.node.object ]);
-            } else {
-                node = babel.types.callExpression(callee, [ path.node ]);
-            }
-            path.replaceWith(node);
-            */
