@@ -80,6 +80,11 @@ body {
   clear: both;
 }
 
+.hidden {
+  display: none;
+  ddd-opacity: 0.2;
+}
+
 .sidebar {
   background: #334;
   box-shadow: 5px 0px 10px 0 #aaa;
@@ -138,12 +143,13 @@ body {
 }
 
 .sidebar .toc {
-  font-size: 15px;
-  padding-left: 20px;
+  font-size: 14px;
+  dddpadding-left: 20px;
 }
 
 .sidebar .toc div.title {
   margin: 15px 0;
+  padding-left: 20px;
 }
 
 .sidebar .toc div.title a {
@@ -157,20 +163,30 @@ body {
 }
 
 .sidebar .toc div {
-  margin: 10px 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
   white-space: nowrap;
 }
 
-.sidebar .toc div.depth-1 {
-  padding-left: 10px;
-}
-
-.sidebar .toc div.depth-2 {
+.sidebar .toc div.depth-0 {
   padding-left: 20px;
 }
 
-.sidebar .toc div.depth-3 {
+.sidebar .toc div.sub:before {
+  content: "\21B3\00a0";
+  font-size: 80%;
+}
+
+.sidebar .toc div.depth-1 {
   padding-left: 30px;
+}
+
+.sidebar .toc div.depth-2 {
+  padding-left: 40px;
+}
+
+.sidebar .toc div.depth-3 {
+  padding-left: 50px;
 }
 
 .sidebar .toc div a {
@@ -180,6 +196,72 @@ body {
 .sidebar .toc div a:hover {
   color: #aac;
 }
+
+.sidebar .toc div.current {
+  font-weight: bold;
+}
+
+.sidebar .toc div.highlight a {
+  color: #444;
+}
+
+.sidebar .toc div.sub {
+  font-size: 90%;
+  font-style: italic;
+  dddopacity: 0.8;
+}
+
+.sidebar .toc div.depth-0.highlight {
+  background: #fff;
+  font-weight: bold;
+}
+
+.sidebar .toc div.depth-1.highlight {
+  background: #ddd;
+}
+
+.sidebar .toc div.depth-1.dedent {
+  border-bottom: 1px solid #bbb;
+}
+
+.sidebar .toc div.depth-1.highlight.selected {
+  background: #bbb;
+  border-top: 2px solid #999;
+}
+
+.sidebar .toc div.depth-2.highlight {
+  background: #bbb;
+}
+
+.sidebar .toc div.depth-2.dedent {
+  border-bottom: 1px solid #999;
+}
+
+.sidebar .toc div.depth-2.highlight.selected {
+  background: #999;
+  border-top: 2px solid #666;
+}
+
+.sidebar .toc div.depth-3.highlight {
+  background: #999;
+}
+
+.sidebar .toc div.depth-3.dedent {
+  border-bottom: 1px solid #777;
+}
+
+.sidebar .toc div.depth-3.highlight.selected {
+  background: #777;
+}
+
+.sidebar .toc div.depth-4.highlight {
+  background: #777;
+}
+
+.sidebar .toc div.depth-4.dedent {
+  border-bottom: 1px solid #555;
+}
+
 
 .breadcrumbs {
   font-style: italic;
@@ -468,6 +550,10 @@ p {
   line-height: 24px;
 }
 
+.docs li {
+  margin: 7px 0;
+}
+
 .content .toc {
   line-height: 25px;
 }
@@ -477,7 +563,7 @@ p {
 
 .content .toc .style-code {
   font-family: "Liberation", monospace;
-  font-size: 115%;
+  dddfont-size: 100%;
 }
 
 .content .toc .style-italic {
@@ -560,7 +646,7 @@ a.link.source {
 }
 
 a.link.source {
-  font-size: 70%;
+  font-size: 100%;
   font-family: "Liberation", monospace;
   font-weight: bold;
   right: 0px;
