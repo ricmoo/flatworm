@@ -289,7 +289,7 @@ export class Script {
 
             let output: string;
             if (type === "result") {
-                output = inspect(value);
+                output = inspect(value, { sorted: true });
 
             } else {
                 // Errors get pulled apart
