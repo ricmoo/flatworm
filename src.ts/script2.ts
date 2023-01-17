@@ -212,19 +212,28 @@ export class Script {
 
         const clumps: Array<{ type: ScriptLineType, code: Array<string> }> = [ ];
         {
-
             let code: Array<string> = [ ]
+
             for (let line of this.#lines) {
                 if (line.trim().startsWith("/\/_")) {
                     line = line.trim();
-                    const type = line.substring(3, line.indexOf(":"));
+                    const colon = line.indexOf(":");
+                    const type = line.substring(3, colon);
                     switch (type) {
-                        case "result": case "error": case "hide":
+                        case "hide": {
+                            const hidden = line.substring(colon + 1).trim()
+                            if (hidden) {
+                                clumps.push({ code: [ hidden ], type: "hide" });
+                            }
+                            break;
+                        }
+                        case "result": case "error":
                             clumps.push({ code, type });
                             break;
                         default:
                             throw new Error(`unknown tag: ${ type }`);
                     }
+
                     code = [ ];
 
                 } else {
