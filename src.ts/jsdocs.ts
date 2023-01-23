@@ -538,6 +538,19 @@ export function getObjects(path: string, exports: Set<string>): Array<any> {
             // @TODO supers
             const supers: Array<string> = [ ];
 
+            if (node.extends) {
+                for (const ext of node.extends) {
+                    if (ext.type === "TSExpressionWithTypeArguments" && ext.expression.type === "Identifier") {
+                        supers.push(getId(ext.expression));
+
+                    } else {
+                        console.log("III", name);
+                        console.dir(node, { depth: null });
+                        throw new Error("check...");
+                    }
+                }
+            }
+
             result.push({ type: "interface", name, lineno, supers, jsdoc });
 
         } else if (type === "ClassDeclaration") {
