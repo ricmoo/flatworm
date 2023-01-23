@@ -635,10 +635,6 @@ a.link.anchor {
   transform: translate(-100%, 15%);
 }
 
-a.link.source {
-  opacity: 0.1;
-}
-
 .section-title a.link.anchor {
   height: 27px;
   width: 35px;
@@ -659,15 +655,20 @@ a.link.source {
   width: 24px;
 }
 
-.show-links:hover a.link {
+.show-links:hover a.link.source {
+  opacity: 1;
+}
+
+.show-links:hover a.link.anchor {
   opacity: 0.4;
 }
 
 a.link.source {
-  font-size: 100%;
+  font-size: 16px;
   font-family: "Liberation", monospace;
-  font-weight: bold;
+  font-weight: normal;
   right: 0px;
+  opacity: 0.5;
   padding-left: 15px;
   transform: translateX(100%);
   text-align: right;
