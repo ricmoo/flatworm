@@ -39,9 +39,15 @@ export class Config {
 
         this.links = new Map();
         for (const linkFile of config.links) {
-            console.log(`Adding links: ${ linkFile }`);
-            const lines = fs.readFileSync(this.resolve(linkFile)).toString().split("\n");
-            this.#addLinks(lines, linkFile);
+            if (typeof(linkFile) === "string") {
+                console.log(`Adding links: ${ linkFile }`);
+                const lines = fs.readFileSync(this.resolve(linkFile)).toString().split("\n");
+                this.#addLinks(lines, linkFile);
+            } else if (typeof(linkFile) === "function") {
+                console.log(`Adding links: callback()`);
+                const lines = linkFile();
+                this.#addLinks(lines, "config.js");
+            }
         }
     }
 
