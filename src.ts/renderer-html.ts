@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import {
     BodyContent, CodeContent,
     SectionWithBody, Subsection, Exported,
-} from "./document2.js";
+} from "./document.js";
 import {
     ElementNode, LinkNode, ListNode, Node, TextNode
 } from "./markdown.js";
@@ -21,11 +21,11 @@ import {
     TypeIdentifier, TypeLiteral, TypeMapping, TypeWrapped
 } from "./jsdocs.js";
 
-import type { Script } from "./script2.js";
+import type { Script } from "./script.js";
 import type {
     Document, Section,
     Content
-} from "./document2.js";
+} from "./document.js";
 
 
 function htmlify(value: string): string {
@@ -500,7 +500,7 @@ class HtmlGenerator {
     appendHeader(): void {
         //const prefix = this.renderer.document.config.prefix;
         this.append(`<html><head>`);
-        this.append(`<link rel="stylesheet" href="${ this.renderer.resolveLink("static/style-v2.css") }">`);
+        this.append(`<link rel="stylesheet" href="${ this.renderer.resolveLink("static/style.css") }">`);
         this.append(`<meta property="og:title" content="Documentation">`);
         this.append(`<meta property="og:description" content="Documentation for ethers, a complete, tiny and simple Ethereum library.">`);
         this.append(`<meta property="og:image" content="${ this.renderer.resolveLink("static/social.jpg") }">`);
@@ -761,7 +761,7 @@ export class HtmlRenderer implements Iterable<Linkable> {
 
     //        "search.js",
     //        "script-v2.js",
-            "style-v2.css",
+            "style.css",
         ].forEach((_filename) => {
             const filename = resolve(__dirname, "../static", _filename);
             const target = join("static", _filename);
