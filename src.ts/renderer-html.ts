@@ -469,7 +469,10 @@ class HtmlGenerator {
         this.appendContent(exported.body);
         this.append(`</div>`);
 
-        // @TODO: examples
+        // Examples
+        for (const example of exported.examples) {
+            this.appendCode(example);
+        }
 
         this.append(`</div>`); // type-
     }
@@ -498,7 +501,9 @@ class HtmlGenerator {
     }
 
 
-    appendLinkable(type: string, anchor: null | string, title: Node, body: Array<Content>, exported?: null | ObjectExport) {
+    appendLinkable(type: string, anchor: null | string, title: Node, body: Array<Content>, exported?: null | Exported) {
+        const objExport: null | ObjectExport = (exported && exported.exported instanceof ObjectExport) ? exported.exported: null;
+
         this.append(`<div class="type-${ type } show-links">`);
 
         this.append(`<div class="title-${ type }">`);
@@ -507,16 +512,16 @@ class HtmlGenerator {
             this.append(`<a class="link anchor" name="${ anchor }" href="${ this.renderer.resolveLink(link.link) }">&nbsp;</a>`);
         }
 
-        if (exported) {
-            this.append(`<span class="type">${ exported.type }</span>&nbsp;`);
+        if (objExport) {
+            this.append(`<span class="type">${ objExport.type }</span>&nbsp;`);
         }
         this.append(this.renderNode(title));
         this.append(`</div>`);
 
-        if (exported && exported.supers.length) {
+        if (objExport && objExport.supers.length) {
             this.append(`<div class="supers">inherits from `);
             let comma = false;
-            for (const s of exported.allSupers) {
+            for (const s of objExport.allSupers) {
                 if (comma) { this.append(`, `); }
                 comma = true;
 
@@ -531,6 +536,12 @@ class HtmlGenerator {
         this.append(`<div class="docs">`);
         this.appendContent(body);
         this.append(`</div>`);
+
+        if (exported) {
+            for (const ex of exported.examples) {
+                this.appendCode(ex);
+            }
+        }
 
         this.append(`</div>`);
     }
@@ -631,10 +642,10 @@ class HtmlGenerator {
     }
 
     appendChildren(type: string, item: SectionWithBody): void {
-        let ex: ObjectExport = null;
+        let ex: null | Exported = null;
         if (item instanceof Exported) {
-            ex = <ObjectExport>(item.exported);
-            this.pushLinks(ex);
+            ex = item;
+            this.pushLinks(<ObjectExport>(item.exported));
         }
 
         this.appendLinkable(type, item.anchor, item.titleNode, item.body, ex);

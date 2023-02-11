@@ -115,6 +115,17 @@ export class SectionWithBody<T extends Subsection | Exported = Subsection | Expo
         };
     }
 
+    async evaluate(config: Config): Promise<void> {
+        for (const content of this.body) {
+            if (!(content instanceof CodeContent)) { continue; }
+            await content.evaluate(config);
+        }
+
+        for (const sub of this.children) {
+            await sub.evaluate(config);
+        }
+    }
+
     get text(): string {
         return [
             this.body.map((c) => c.text).join("\n"),
@@ -153,17 +164,6 @@ export class Section extends SectionWithBody<Subsection | Exported> {
         const nav = this.getExtension("nav");
         if (nav != null) { return nav; }
         return this.title;
-    }
-
-    async evaluate(config: Config): Promise<void> {
-        for (const content of this.body) {
-            if (!(content instanceof CodeContent)) { continue; }
-            await content.evaluate(config);
-        }
-
-        for (const sub of this.children) {
-            await sub.evaluate(config);
-        }
     }
 
     static fromContent(content: string, path: string): Section {
@@ -241,6 +241,11 @@ export class Section extends SectionWithBody<Subsection | Exported> {
         section.body.push(Content.nullContent(api.flatworm));
         api.dependencies.forEach((d) => section.dependencies.push(d));
 
+        for (const ex of api.examples) {
+            const lines = ex.split("\n");
+            section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n")));
+        }
+
         for (const apiSub of api.objs) {
             if (apiSub instanceof ApiSubsection) {
                 let value = apiSub.title;
@@ -248,9 +253,16 @@ export class Section extends SectionWithBody<Subsection | Exported> {
 
                 const subsection = new Subsection(value, section.path);
                 subsection.body.push(Content.nullContent(apiSub.flatworm));
+
+                for (const ex of apiSub.examples) {
+                    const lines = ex.split("\n");
+                    section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n")));
+                }
+
                 for (const ex of apiSub.objs) {
                     subsection.children.push(new Exported(ex, section.path));
                 }
+
                 section.children.push(subsection);
 
             } else if (apiSub instanceof Export) {
@@ -277,19 +289,11 @@ export class Subsection extends SectionWithBody<Exported> {
         if (this.anchor == null) { throw new Error(`anchor required for path: ${ this.value }`); }
         return `${ this.parentPath }/#${ this.anchor }`;
     }
-
-    async evaluate(config: Config): Promise<void> {
-        for (const content of this.body) {
-             await content.evaluate(config);
-        }
-    }
 }
 
 export class Exported extends SectionWithBody<Exported> {
     readonly exported: Export;
     readonly parentPath: string;
-
-    readonly examples: Array<CodeContent>;
 
     constructor(exported: Export, parentPath: string) {
         const value = `${ exported.name } @<${ exported.id }>`;
@@ -298,13 +302,16 @@ export class Exported extends SectionWithBody<Exported> {
         this.parentPath = parentPath;
 
         this.body.push(new BodyContent("null", "", parseMarkdown(exported.flatworm)));
-        this.examples = [ ];
 
         if (exported instanceof ObjectExport) {
             for (const child of exported) {
                 this.children.push(new Exported(child, this.parentPath));
             }
         }
+    }
+
+    get examples(): Array<Script> {
+        return this.exported.examples();
     }
 
     get path(): string {
@@ -317,12 +324,9 @@ export class Exported extends SectionWithBody<Exported> {
     }
 
     async evaluate(config: Config): Promise<void> {
-        for (const content of this.body) {
-             await content.evaluate(config);
-        }
+        super.evaluate(config);
+        await this.exported.evaluate(config);
     }
-
-
 }
 
 /*

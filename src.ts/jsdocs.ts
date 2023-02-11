@@ -1283,31 +1283,23 @@ export class _ApiSection<T extends ApiSubsection | Export> {
     // @todo: rename to subsections
     #objs: Array<T>;
 
+    #examples: Array<string>;
+
     constructor(title?: string, flatworm?: string, anchor?: string) {
         this.#title = title;
         this.#flatworm = flatworm || "";
         this.#anchor = anchor || null;
         this.#objs = [ ];
+        this.#examples = [ ];
     }
 
     get objs(): Array<T> {
         this.#objs.sort(sortProps);  // @TODO: cache this? lazy?
         return this.#objs;
+    }
 
-        // Move all non-objects to the top
-/*
-        const rTop: Array<T> = [ ];
-        const rBottom: Array<T> = [ ];
-        for (const obj of this.#objs) {
-            if (obj instanceof ApiSubsection || obj instanceof ObjectExport) {
-                rBottom.push(obj);
-            } else {
-                rTop.push(obj);
-            }
-        }
-
-        return rTop.concat(rBottom);;
-*/
+    get examples(): Array<string> {
+        return this.#examples;
     }
 
     get anchor(): string { return this.#anchor; }
@@ -1316,6 +1308,7 @@ export class _ApiSection<T extends ApiSubsection | Export> {
 
     // @TODO: should these throw if already set?
     _addObject(item: T): void { this.#objs.push(item); }
+    _addExample(ex: string): void { this.#examples.push(ex); }
     _setFlatworm(flatworm: string): void { this.#flatworm = flatworm; }
     _setTitle(title: string): void { this.#title = title; }
     _setAnchor(anchor: string): void { this.#anchor = anchor; }
@@ -1677,6 +1670,10 @@ export class ApiDocument {
                 subsection._addExport(remaining.get(ex));
                 remaining.delete(ex);
             }
+
+            for (const ex of (docTags.example || [])) {
+                subsection._addExample(ex);
+            }
         }
 
         // Add all the sections
@@ -1715,6 +1712,10 @@ export class ApiDocument {
                 if (!remaining.has(ex)) { continue; }
                 section._addSubsection(remaining.get(ex));
                 remaining.delete(ex);
+            }
+
+            for (const ex of (docTags.example || [])) {
+                section._addExample(ex);
             }
         }
 
