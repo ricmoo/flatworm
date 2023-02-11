@@ -88,15 +88,35 @@ export abstract class Fragment {
     }
 }
 
-export class SectionWithBody<T extends Subsection | Exported = Subsection | Exported> extends Fragment implements Iterable<T> {
+export abstract class SectionWithBody<T extends Subsection | Exported = Subsection | Exported> extends Fragment implements Iterable<T> {
     readonly body: Array<Content>;
-    readonly children: Array<T>;
+
+    #parent: null | SectionWithBody;
+    #children: Array<T>;
 
     constructor(directive: string, value: string) {
         super(directive, value);
 
         this.body = [ ];
-        this.children = [ ];
+        this.#parent = null;
+        this.#children = [ ];
+    }
+
+    get parent(): null | SectionWithBody { return this.#parent; }
+
+    get depth(): number {
+        return this.parent.depth + 1;
+    }
+
+    get children(): ReadonlyArray<T> { return this.#children.slice(); }
+    _addChild(child: T): void {
+        if (child.parent) { throw new Error("already has a parent"); }
+        this.#children.push(child);
+        child._setParent(this);
+    }
+    _setParent(parent: SectionWithBody): void {
+        if (this.#parent) { throw new Error("got parent"); }
+        this.#parent = parent;
     }
 
     get recursive(): boolean { return true; }
@@ -160,6 +180,10 @@ export class Section extends SectionWithBody<Subsection | Exported> {
         return parseInt(priority);
     }
 
+    get depth(): number {
+        return 0; //this.path.split("/").length - 1;
+    }
+
     get navTitle(): string {
         const nav = this.getExtension("nav");
         if (nav != null) { return nav; }
@@ -190,7 +214,7 @@ export class Section extends SectionWithBody<Subsection | Exported> {
                 if (section == null) { throw new Error("missing section"); }
                 subsection = new Subsection(value, section.path);
                 subsection.body.push(Content.nullContent(content));
-                section.children.push(subsection);
+                section._addChild(subsection);
 
             } else {
                 const cont = Content.fromContent(tag, value, content);
@@ -260,13 +284,13 @@ export class Section extends SectionWithBody<Subsection | Exported> {
                 }
 
                 for (const ex of apiSub.objs) {
-                    subsection.children.push(new Exported(ex, section.path));
+                    subsection._addChild(new Exported(ex, section.path));
                 }
 
-                section.children.push(subsection);
+                section._addChild(subsection);
 
             } else if (apiSub instanceof Export) {
-                section.children.push(new Exported(apiSub, section.path));
+                section._addChild(new Exported(apiSub, section.path));
 
             } else {
                 throw new Error("unsupported subsection");
@@ -305,7 +329,7 @@ export class Exported extends SectionWithBody<Exported> {
 
         if (exported instanceof ObjectExport) {
             for (const child of exported) {
-                this.children.push(new Exported(child, this.parentPath));
+                this._addChild(new Exported(child, this.parentPath));
             }
         }
     }

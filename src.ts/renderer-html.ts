@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 
 import {
     BodyContent, CodeContent,
-    SectionWithBody, Subsection, Exported,
+    SectionWithBody, Section, Subsection, Exported,
 } from "./document.js";
 import {
     ElementNode, LinkNode, ListNode, Node, TextNode
@@ -23,7 +23,7 @@ import {
 
 import type { Script } from "./script.js";
 import type {
-    Document, Section,
+    Document,
     Content
 } from "./document.js";
 
@@ -69,6 +69,8 @@ type TocEntry = {
     title: string,
     selected?: boolean,
     highlit?: boolean,
+    sub?: boolean;
+    dedent?: boolean;
     hidden?: boolean,
     current?: boolean
 };
@@ -90,30 +92,50 @@ type _TocOffset = { depth: number, start: number, end: number };
 // @TODO: Rename path => link or href?
 
 function prepareToc(section: Section, renderer: HtmlRenderer): Array<TocEntry> {
-    const countDepth = (value: string) => {
-        return (value.split("/").length - 1) + (value.split("#").length - 1);
+    const countDepth = (entry: SectionWithBody & { path: string }) => {
+
+        const value = entry.path;
+        let count = value.split("/#")[0].split("/").length - 1;
+        /*
+        let comps = value.split("#");
+        let count = comps.length - 1;
+
+        for (const comp of comps[0].split("/")) {
+            if (comp.trim()) { count++; }
+        }
+        */
+
+        return count + entry.depth;
     };
 
     const result: Array<TocEntry> = [ ];
 
     // Get all the TOC entries
     let current = -1;
+    let parent: null | SectionWithBody = null;
     {
         let minDepth = -1, i = 0;
-        for (const { path, title } of renderer) {
+        for (const entry of renderer) {
+            const { path, title } = entry;
 
             // Ignore the root
             if (!path) { continue; }
 
             // Get the depth and track the minimum depth
-            const depth = countDepth(path);
+            const depth = countDepth(entry);
             if (minDepth === -1 || depth < minDepth) { minDepth = depth; }
 
             // Found the current entry
-            if (section.path === path) { current = i; }
+            if (section.path === path) { current = i; parent = entry; }
             i++
 
-            result.push({ depth, path, title });
+            const sub = (parent && entry.parent === parent);
+
+            if (result.length && !sub && result[result.length - 1].sub) {
+                result[result.length - 1].dedent = true;
+            }
+
+            result.push({ depth, path, sub, title });
         }
 
         // Adjust the depth based on the minimum depth
@@ -249,10 +271,13 @@ const foldType: Record<ExportType, string> = {
     "class": ""
 };
 
+
 class HtmlGenerator {
     readonly renderer: HtmlRenderer;
     readonly section: Section;
     readonly #output: Array<string>;
+
+    toc: Array<SectionWithBody & { path: string }>;
 
     #links: Array<Map<string, Link>>;
 
@@ -261,6 +286,7 @@ class HtmlGenerator {
         this.section = section;
         this.#output = [ ];
         this.#links = [ new Map() ];
+        this.toc = [ ];
     }
 
     get output(): string { return this.#output.join(""); }
@@ -500,7 +526,6 @@ class HtmlGenerator {
         }
     }
 
-
     appendLinkable(type: string, anchor: null | string, title: Node, body: Array<Content>, exported?: null | Exported) {
         const objExport: null | ObjectExport = (exported && exported.exported instanceof ObjectExport) ? exported.exported: null;
 
@@ -563,8 +588,8 @@ class HtmlGenerator {
         this.append(`</div><div class="toc">`);
         this.append(`<div class="title"><a href="${ this.renderer.resolveLink("") }">DOCUMENTATION</a></div>`);
 
-        for (const { depth, path, title, current, selected, highlit } of prepareToc(this.section, this.renderer)) {
-            this.append(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }"><a href="${ this.renderer.resolveLink(path) }">${ title }</a></div>`);
+        for (const { depth, sub, dedent, path, title, current, selected, highlit } of prepareToc(this.section, this.renderer)) {
+            this.append(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }${ dedent ? " dedent": "" }${ sub ? " sub": "" }"><a href="${ this.renderer.resolveLink(path) }">${ title }</a></div>`);
             if (!current) { continue; }
             /*
             if (section instanceof ApiSection) {
@@ -648,6 +673,14 @@ class HtmlGenerator {
             this.pushLinks(<ObjectExport>(item.exported));
         }
 
+        try {
+            const path = (<any>item).path;
+            if (path) {
+               this.toc.push(<any>item);
+            }
+        } catch (e) { }
+
+
         this.appendLinkable(type, item.anchor, item.titleNode, item.body, ex);
         let lastType: string = "";
         for (const sub of item) {
@@ -687,11 +720,23 @@ class HtmlGenerator {
     }
 }
 
-export class HtmlRenderer implements Iterable<Linkable> {
+export class TocGenerator extends HtmlGenerator {
+    // Prevent storing any content
+    append(line: string): void { }
+
+    // Prevent infinite recursion
+    appendSidebar(): void { }
+
+    render(): void {
+        this.appendChildren("section", this.section);
+    }
+}
+
+export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }> {
     readonly document: Document;
 
     #links: Map<string, Link>;
-    #targets: Array<Linkable>;
+    #targets: Array<SectionWithBody & { path: string }>;
 
     constructor(document: Document) {
         this.document = document;
@@ -701,15 +746,15 @@ export class HtmlRenderer implements Iterable<Linkable> {
 
         // Map href (e.g. "foo/bar") to their section
         this.#targets = [ ];
-        this.#targets.push({ title: "Documentation", path: "", anchor: null });
+        this.#targets.push(new Section("Documentation", ""));
 
         const srcBaseUrl = this.document.config.srcBaseUrl;
 
         const addLink = (item: Linkable, style: string) => {
-            try {
-                const path = item.path;
-                if (path) { this.#targets.push(item); }
-            } catch (error) { }
+            //try {
+            //    const path = item.path;
+            //    if (path) { this.#targets.push(item); }
+            //} catch (error) { }
 
             if (srcBaseUrl && item instanceof Exported) {
                 const ex = item.exported;
@@ -754,12 +799,21 @@ export class HtmlRenderer implements Iterable<Linkable> {
             }
         }
 
+        // Build TOC
+        for (const section of document) {
+            const toc = new TocGenerator(this, section);
+            toc.render();
+            for (const link of toc.toc) {
+                this.#targets.push(link);
+            }
+        }
+
         // Add links
     }
 
     get length(): number { return this.#targets.length; }
 
-    [Symbol.iterator](): Iterator<Linkable> {
+    [Symbol.iterator](): Iterator<SectionWithBody & { path: string }> {
         let index = 0;
         return {
             next: () => {
