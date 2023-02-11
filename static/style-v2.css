@@ -336,7 +336,7 @@ body {
   padding-top: 25px;
 }
 
-.content .section-title {
+.content .title-section {
   border-top: 1px solid #aaa;
   color: #000;
   font-size: 175%;
@@ -346,42 +346,36 @@ body {
   position: relative;
 }
 
-.content .title {
+.content .title-subsection {
   border-top: 2px solid #444;
   color: #444;
   font-size: 150%;
   font-weight: bold;
-  margin: 20px 0 10px;
+  margin: 20px 0 20px;
   padding: 20px 0 0 0;
   position: relative;
 }
 
-.content .subsection .title {
-  border-top: 1px solid #aaa;
+.content .title-export {
+  border-top: 2px solid #444;
+  color: #444;
+  font-size: 150%;
+  font-weight: bold;
+  margin: 20px 0 20px;
+  padding: 20px 0 0 0;
+  position: relative;
 }
 
-.content .title .type {
+.content .title-export .type {
   opacity: 0.5;
 }
 
-/* Use header style */
-/*
-.subsection .title {
-  border-bottom: 1px solid #ccc;
-  border-top: none;
-  color: #444;
-  font-size: 90%;
-  font-weight: bold;
-  margin: 30px 0 16px;
-  padding: 0 0 7px 0;
-}
-*/
 .supers {
   color: #777;
   font-style: italic;
   font-size: 16px;
   padding-left: 50px;
-  margin: 10px 0 10px;
+  margin: -10px 0 20px;
   text-indent: -50px;
 }
 
@@ -436,25 +430,6 @@ body {
   margin: 20px 0 -15px;
 }
 
-/*
-.code-title {
-    height: 7px;
-    margin-left: 30px;
-    margin-top: 10px;
-    position: relative;
-}
-
-.code-title div {
-    box-sizing: border-box;
-    color: #88a;
-    font-style: italic;
-    font-size: 18px;
-    padding-right: 10px;
-    position: absolute;
-    text-align: right;
-    width: 100%;
-}
-*/
 .code-block {
     background: #f8f8ff;
     border: 2px solid #88a;
@@ -551,7 +526,7 @@ body {
   font-weight: bold;
 }
 
-.prop-info .docs {
+.docs.indent {
   padding: 0px 0 0 30px;
 }
 
@@ -635,12 +610,17 @@ a.link.anchor {
   transform: translate(-100%, 15%);
 }
 
-.section-title a.link.anchor {
+.title-section a.link.anchor {
   height: 27px;
   width: 35px;
 }
 
-.title a.link.anchor {
+.title-subsection a.link.anchor {
+  height: 24px;
+  width: 35px;
+}
+
+.title-export a.link.anchor {
   height: 24px;
   width: 35px;
 }
@@ -685,15 +665,6 @@ a.link.source {
 .content a.link-lit:hover {
   background-color: #ddf;
 }
-
-/*
-.content a.link:hover {
-  background-color: transparent;
-}
-.content a.source:hover {
-  background-color: transparent;
-}
-*/
 
 .content a:visited {
 }
