@@ -13,12 +13,12 @@
 import fs from "fs";
 import { extname, relative, resolve } from "path";
 
-import { Config } from "./config2.js";
+import { Config } from "./config.js";
 import {
     parseBlock, parseMarkdown, StylesAll,
     Node, TextNode
 } from "./markdown.js";
-import { Script } from "./script2.js";
+import { Script } from "./script.js";
 import {
     ApiDocument, ApiSection, ApiSubsection,
     Export, ClassExport
@@ -127,14 +127,21 @@ export class Section extends SectionWithBody<Subsection | Exported> {
     readonly anchor: string;
     readonly path: string;
 
+    #mtime: number;
+
     dependencies: Array<string>;
 
     constructor(value: string, path: string) {
         super("section", value);
         this.path = path;
 
+        this.#mtime = 0;
+
         this.dependencies = [ ];
     }
+
+    get mtime(): number { return this.#mtime; }
+    _setMtime(mtime: number) { this.#mtime = mtime; }
 
     get priority(): number {
         const priority = this.getExtension("priority");
@@ -593,7 +600,40 @@ export class Document implements Iterable<Section>{
         };
         doc.sections.forEach(setDoc);
 
+        const now = (new Date()).getTime();
+        doc.sections.forEach((d) => { d._setMtime(now); });
+
         return doc;
+    }
+
+    async populateMtime(): Promise<void> {
+        const now = (new Date()).getTime();
+
+        const tsCache: Map<string, number> = new Map();
+
+        const getTs = async (path: string) => {
+            let ts = tsCache.get(path);
+            if (ts == null) {
+                ts = await this.config.getTimestamp(path);
+                if (ts == null) { ts = -1; }
+                tsCache.set(path, ts);
+            }
+            return ts;
+        };
+
+        const getGenDate = async function(deps: Array<string>) {
+            let latest = -1;
+            for (const dep of deps) {
+                const ts = await getTs(dep);
+                if (ts > latest) { latest = ts; }
+            }
+            if (latest === -1) { return now; }
+            return latest;
+        };
+
+        for (const section of this) {
+            section._setMtime(await getGenDate(section.dependencies));
+        }
     }
 
     getLinkName(anchor: string): string {

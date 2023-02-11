@@ -33,6 +33,36 @@ function htmlify(value: string): string {
     return value.replace(/&/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const Months = [
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"
+];
+
+function getTimestamp(value: number): string {
+    const now = new Date(value);
+
+    let hours = now.getHours();
+    let meridian = "am";
+    if (hours >= 12) {
+        hours -= 12;
+        meridian = "pm";
+    } else if (hours === 0) {
+        hours = 12;
+    }
+
+    let minutes = String(now.getMinutes());
+    if (minutes.length < 2) { minutes = "0" + minutes; }
+
+    return [
+        Months[now.getMonth()], " ",
+        now.getDate(), ", ",
+        now.getFullYear(), ", ",
+        hours, ":",
+        minutes,
+        meridian
+    ].join("");
+}
+
 type TocEntry = {
     depth: number,
     path: string,
@@ -578,8 +608,6 @@ class HtmlGenerator {
         let prev = (i > 0) ? this.renderer.getLinkable(paths[i - 1]): null;
         let next = (i < paths.length - 1) ? this.renderer.getLinkable(paths[i + 1]): null;
 
-        const genDate = "calcualte...";
-
         this.append(`<div class="footer"><div class="nav"><div class="clearfix"></div>`);
         if (prev) {
             this.append(`<div class="previous"><a href="${ this.renderer.resolveLink(prev.path) }"><span class="arrow">&larr;</span>&nbsp;${ prev.title }</a></div>`);
@@ -587,7 +615,7 @@ class HtmlGenerator {
         if (next) {
             this.append(`<div class="next"><a href="${ this.renderer.resolveLink(next.path) }">${ next.title }<span class="arrow">&rarr;</span></a></div>`);
         }
-        this.append(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ genDate }.</div></div>`);
+        this.append(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ getTimestamp(this.section.mtime) }.</div></div>`);
     }
 
     appendFooter(): void {

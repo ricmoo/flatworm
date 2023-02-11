@@ -1,16 +1,18 @@
 import fs from "fs";
 import { dirname, join, resolve } from "path";
 
-import { HtmlRenderer } from "./renderer-html2.js";
+import { HtmlRenderer } from "./renderer-html.js";
 
-import { Config } from "./config2.js";
-import { Document, Exported } from "./document2.js";
+import { Config } from "./config.js";
+import { Document, Exported } from "./document.js";
 
 (async function() {
     const path = resolve(process.argv[2]);
     const config = await Config.fromPath(path);
 
     const doc = Document.fromConfig(config);
+    await doc.populateMtime();
+
     //console.dir(doc, { depth: null });
     for (const section of doc) {
         const title = section.title;

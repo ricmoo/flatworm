@@ -1,6 +1,6 @@
 "use strict";
 
-import type { Document } from "./document2.js";
+import type { Document } from "./document.js";
 
 let NextId = 1;
 

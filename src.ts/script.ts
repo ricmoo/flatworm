@@ -3,7 +3,7 @@ import babel from "@babel/core";
 import { inspect } from "util";
 import vm from "vm";
 
-import type { Config } from "./config2.js";
+import type { Config } from "./config.js";
 
 export type ScriptLineType = "code" | "comment" | "result" | "error" |
     "placeholder" | "hide" | "unknown";

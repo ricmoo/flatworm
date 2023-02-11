@@ -5,9 +5,9 @@ import { parse } from "@babel/parser";
 
 import { parseMarkdown } from "./markdown.js";
 
-import { Script } from "./script2.js";
+import { Script } from "./script.js";
 
-import type { Config } from "./config2.js";
+import type { Config } from "./config.js";
 
 const DEBUG = false;
 
