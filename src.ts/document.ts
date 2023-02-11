@@ -21,7 +21,7 @@ import {
 import { Script } from "./script.js";
 import {
     ApiDocument, ApiSection, ApiSubsection,
-    Export, ClassExport
+    Export, ObjectExport
 } from "./jsdocs.js";
 
 
@@ -151,8 +151,8 @@ export class Section extends SectionWithBody<Subsection | Exported> {
 
     get navTitle(): string {
         const nav = this.getExtension("nav");
-        if (nav == null) { return this.title; }
-        return nav;
+        if (nav != null) { return nav; }
+        return this.title;
     }
 
     async evaluate(config: Config): Promise<void> {
@@ -235,6 +235,7 @@ export class Section extends SectionWithBody<Subsection | Exported> {
     static fromApi(api: ApiSection, path: string): Section {
         let value = api.title;
         if (api.anchor) { value += ` @<${ api.anchor}>`; }
+        value += ` @nav<${ api.navTitle }>`
 
         const section = new Section(value, path);
         section.body.push(Content.nullContent(api.flatworm));
@@ -299,7 +300,7 @@ export class Exported extends SectionWithBody<Exported> {
         this.body.push(new BodyContent("null", "", parseMarkdown(exported.flatworm)));
         this.examples = [ ];
 
-        if (exported instanceof ClassExport) {
+        if (exported instanceof ObjectExport) {
             for (const child of exported) {
                 this.children.push(new Exported(child, this.parentPath));
             }
@@ -312,7 +313,7 @@ export class Exported extends SectionWithBody<Exported> {
     }
 
     get recursive(): boolean {
-        return (this.exported instanceof ClassExport);
+        return (this.exported instanceof ObjectExport);
     }
 
     async evaluate(config: Config): Promise<void> {

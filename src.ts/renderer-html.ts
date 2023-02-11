@@ -221,13 +221,15 @@ export type Link = {
 interface Linkable {
     anchor: null | string;
     title: string;
+    navTitle?: string;
     path: string;
 };
 
 const foldType: Record<ExportType, string> = {
     "const": "CONSTANTS",
 
-    "interface": "TYPES",
+//    "interface": "TYPES",
+    "interface": "",
     "type": "TYPES",
 
     "function": "FUNCTIONS",
@@ -316,12 +318,18 @@ class HtmlGenerator {
                     style = "normal";
                 }
 
+                let extraCls = "", extraAttr = "";
+                if (style === "code") {
+                    extraCls = "notranslate ";
+                    extraAttr = ` translate="no"`
+                }
+
                 let external = "", target = "";
                 if (link.indexOf(":/\/") >= 0) {
                     external = "external";
                     target = ` target="_blank"`;
                 }
-                return `<span class="style-link style-${ style } ${ external }"><a class="link-lit" href="${ this.renderer.resolveLink(link) }"${ target }>${ content }</a></span>`;
+                return `<span class="${ extraCls }style-link style-${ style } ${ external }"${extraAttr}><a class="link-lit" href="${ this.renderer.resolveLink(link) }"${ target }>${ content }</a></span>`;
             }
 
             console.log(`WARNING: missing link ${ JSON.stringify(node.link) } (section: ${ this.section.path })`);
@@ -592,7 +600,7 @@ class HtmlGenerator {
                 const link = this.renderer.getLinkable(path);
                 if (link == null) { continue; }
                 if (path !== "") { path += "/"; }
-                this.append(`<a href="${ this.renderer.resolveLink(path) }">${ link.title }</a> <span class="symbol">&raquo;</span>`);
+                this.append(`<a href="${ this.renderer.resolveLink(path) }">${ link.navTitle || link.title }</a> <span class="symbol">&raquo;</span>`);
             } else {
                 this.append(`<i>${ this.section.title }</i>`);
             }
