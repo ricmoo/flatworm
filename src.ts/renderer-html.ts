@@ -1,3 +1,4 @@
+/*
 "use strict";
 
 import fs from "fs";
@@ -65,7 +66,7 @@ Tags[ElementStyle.UNDERLINE] = "u";
 
 const DOT = '<span class="symbol">.</span>'
 
-/*
+/ *
 // Maybe use this for code, so it can include entities?
 function escapeHtml(html: string): string {
     return html.replace(/(&([a-zA-Z0-9]+;)|<|>)/g, (all, token, entity) => {
@@ -75,7 +76,7 @@ function escapeHtml(html: string): string {
         return (<any>{ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[token];
     });
 }
-*/
+* /
 
 function escape(html: string): string {
     return html.replace(/(&|<|>)/g, (all, token) => {
@@ -761,3 +762,5 @@ export class SinglePageHtmlRenderer extends HtmlRenderer {
         } ];
     }
 }
+
+*/
