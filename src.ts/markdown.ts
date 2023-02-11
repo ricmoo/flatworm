@@ -1,6 +1,6 @@
 "use strict";
 
-import type { Document, Fragment, Page } from "./document";
+import type { Document } from "./document2.js";
 
 let NextId = 1;
 
@@ -12,25 +12,13 @@ export abstract class Node {
     }
 
     #document: Document;
-    #page: Page;
-    #fragment: Fragment;
-    _setDocument(document: Document, page: Page, fragment: Fragment): void {
+    _setDocument(document: Document): void {
         if (this.#document) { throw new Error("already has a document"); }
         this.#document = document;
-        this.#page = page;
-        this.#fragment = fragment;
     }
 
     get document(): Document {
         return this.#document;
-    }
-
-    get page(): Page {
-        return this.#page;
-    }
-
-    get fragment(): Fragment {
-        return this.#fragment;
     }
 
     abstract get textContent(): string;
@@ -148,9 +136,9 @@ export class ElementNode extends Node {
         this.children = Object.freeze(<Array<Node>>children);
     }
 
-    _setDocument(document: Document, page: Page, fragment: Fragment): void {
-        super._setDocument(document, page, fragment);
-        this.children.forEach((c) => c._setDocument(document, page, fragment));
+    _setDocument(document: Document): void {
+        super._setDocument(document);
+        this.children.forEach((c) => c._setDocument(document));
     }
 
     get textContent(): string {

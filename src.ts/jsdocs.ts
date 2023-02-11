@@ -358,34 +358,7 @@ function getId(node: Node): string {
     if (node == null || node.type !== "Identifier") { throw new Error("not an identifier"); }
     return node.name;
 }
-/*
-class ExportTree {
-    #children: Map<string, Set<string>>;
 
-    constructor() {
-        this.#children = new Map();
-    }
-
-    getExports(filename: string): Set<string> {
-    }
-
-    addChild(filename: string, name: string): void {
-        let children = this.#children.get(filename);
-        if (children == null) {
-            children = new Set();
-            this.#children.set(filename, children);
-        }
-        children.add(name);
-    }
-
-    getChildren(filename: string): Set<string> {
-        return new Set(this.#children.get(filename) || [ ]);
-    }
-
-    getDescendents(filename: string): Set<string> {
-    }
-}
-*/
 export function getExports(path: string): Record<string, Set<string>> {
 
     const result: Record<string, Set<string>> = { };
@@ -830,8 +803,50 @@ function splitDocs(docs: string): { flatworm: string, docTags: Record<string, Ar
     }
 }
 
+export type ExportType = "abstract class" | "class" | "const" |
+    "constructor" | "create" | "function" | "interface" |
+    "method" | "property" | "static method" | "type";
 
-export class Export {
+const sortPropOrder: Record<ExportType, number> = {
+    "const": 1,
+
+    "interface": 2,
+    "type": 2,
+
+    "function": 3,
+
+    "property": 4,
+
+    "constructor": 5,
+    "create": 6,
+
+    "method": 7,
+
+    "static method": 8,
+
+    "abstract class": 9,
+    "class": 10
+};
+
+function sortProps(a: ApiSubsection | Export, b: ApiSubsection | Export) {
+    const isSubA = (a instanceof ApiSubsection);
+    const isSubB = (b instanceof ApiSubsection);
+
+    if (isSubA && !isSubB) { return 1; }
+    if (!isSubA && isSubB) { return -1; }
+
+    const nameA = (isSubA) ? a.title: a.name;
+    const nameB = (isSubB) ? b.title: b.name;
+
+    if (isSubA || isSubB) { return nameA.localeCompare(nameB); }
+
+    const pa = sortPropOrder[a.type], pb = sortPropOrder[b.type];
+    const cmp = pa - pb;
+    if (cmp !== 0) { return cmp; }
+    return nameA.localeCompare(nameB);
+}
+
+export abstract class Export {
     readonly filename: string;
     readonly lineno: number;
     readonly name: string;
@@ -846,6 +861,10 @@ export class Export {
         this.#docs = docs;
         this.#examples = null;
     }
+
+    abstract get type(): ExportType;
+
+    get title(): string { return this.name; }
 
     get dependencies(): Array<string> { return [ this.filename ]; }
 
@@ -927,8 +946,6 @@ export abstract class ReturnsExport extends Export {
         return super.id;
     }
 
-    abstract get type(): string;
-
     get prefix(): string {
         if (this.#parent == null) { return ""; }
         return getInstanceName(this.#parent.name);
@@ -979,17 +996,17 @@ export class FunctionExport extends ReturnsExport {
         return super.id;
     }
 
-    get type(): string {
+    get type(): ExportType {
         const parent = this.parent;
         if (parent) {
             if (this.name === "constructor") {
-                return "create";
+                return "constructor";
             } else if (this.isStatic) {
                 const returns = this.returns.type;
                 if (returns === parent.name || returns === `Promise<${ parent.name }>`) {
                     return "create";
                 }
-                return "static-method";
+                return "static method";
             }
             return "method";
         }
@@ -1026,7 +1043,7 @@ export class PropertyExport extends ReturnsExport {
         this._updateAccess(access);
     }
 
-    get type(): string { return "property"; }
+    get type(): ExportType { return "property"; }
 
     get isReadonly(): boolean {
         return (this._access !== "+write");
@@ -1060,26 +1077,59 @@ export class PropertyExport extends ReturnsExport {
     }
 }
 
-export class ObjectExport extends Export {
+export abstract class ObjectExport extends Export implements Iterable<Export> {
     readonly methods: Map<string, FunctionExport>;
     readonly properties: Map<string, PropertyExport>;
-    readonly supers: Array<string>;
 
-    readonly type: string;
+    // The Super classes.
+    readonly supers: Array<ObjectExport>;
 
-    constructor(type: string, filename: string, lineno: number, name: string, docs: string, supers: Array<string>) {
+    constructor(filename: string, lineno: number, name: string, docs: string) {
         super(filename, lineno, name, docs);
-        this.type = type;
-        this.supers = supers;
+        this.supers = [ ];
         this.methods = new Map();
         this.properties = new Map();
     }
 
+    get children(): Array<Export> {
+        let children: Array<Export> = Array.from(this.properties.values());
+        children = children.concat(Array.from(this.methods.values()));
+        children.sort(sortProps);
+        return children;
+    }
+
+    get length(): number {
+        return this.children.length;
+    }
+
+    [Symbol.iterator](): Iterator<Export> {
+        const children = this.children;
+        let index = 0;
+        return {
+            next: () => {
+                if (index < this.length) {
+                    return { value: children[index++], done: false }
+                }
+                return { value: undefined, done: true };
+            }
+        };
+    }
     async evaluate(config: Config): Promise<void> {
         await super.evaluate(config);
 
         for (const [ , obj ] of this.methods) { await obj.evaluate(config); }
         for (const [ , obj ] of this.methods) { await obj.evaluate(config); }
+    }
+
+    get allSupers(): Array<ObjectExport> {
+        const result: Set<ObjectExport> = new Set();
+        for (const s of this.supers) {
+            result.add(s);
+            for (const ss of s.supers) {
+                result.add(ss);
+            }
+        }
+        return Array.from(result);
     }
 
     dump(_indent: number = 0): void {
@@ -1120,6 +1170,13 @@ export class ObjectExport extends Export {
         value._setParent(this);
     }
 
+    _addSuper(value: ObjectExport): boolean {
+        if (this.supers.indexOf(value) === -1) {
+            this.supers.push(value);
+            return true;
+        }
+        return false;
+    }
 }
 
 export class ClassExport extends ObjectExport {
@@ -1129,11 +1186,23 @@ export class ClassExport extends ObjectExport {
     #ctor: null | FunctionExport;
     get ctor(): null | FunctionExport { return this.#ctor; }
 
-    constructor(filename: string, lineno: number, name: string, docs: string, supers: Array<string>, isAbstract: boolean) {
-        super(isAbstract ? "abstract class": "class", filename, lineno, name, docs, supers);
+    constructor(filename: string, lineno: number, name: string, docs: string, isAbstract: boolean) {
+        super(filename, lineno, name, docs);
         this.isAbstract = isAbstract;
         this.staticMethods = new Map();
         this.#ctor = null;
+    }
+
+    get type(): ExportType {
+        return this.isAbstract ? "abstract class": "class";
+    }
+
+    get children(): Array<Export> {
+        let children = super.children;
+        children = children.concat(Array.from(this.staticMethods.values()));
+        if (this.ctor) { children.push(this.ctor); }
+        children.sort(sortProps);
+        return children;
     }
 
     async evaluate(config: Config): Promise<void> {
@@ -1166,14 +1235,19 @@ export class ClassExport extends ObjectExport {
 }
 
 export class InterfaceExport extends ObjectExport {
+    constructor(filename: string, lineno: number, name: string, docs: string) {
+        super(filename, lineno, name, docs);
+    }
+
+    get type(): ExportType { return "interface"; }
 }
 
 export class TypeExport extends ReturnsExport {
-    get type(): string { return "type"; }
+    get type(): ExportType { return "type"; }
 }
 
 export class ConstExport extends ReturnsExport {
-    get type(): string { return "const"; }
+    get type(): ExportType { return "const"; }
 }
 
 function splitDocloc(docloc: string): { path: string, title: string, anchor: null | string } {
@@ -1201,30 +1275,47 @@ export type SectionInfo = {
 }
 */
 
-export class _ApiSection<T> {
+export class _ApiSection<T extends ApiSubsection | Export> {
     #anchor: null | string;
     #flatworm: string;
     #title: string;
 
     // @todo: rename to subsections
-    objs: Array<T>;
+    #objs: Array<T>;
 
     constructor(title?: string, flatworm?: string, anchor?: string) {
         this.#title = title;
         this.#flatworm = flatworm || "";
         this.#anchor = anchor || null;
-        this.objs = [ ];
+        this.#objs = [ ];
+    }
+
+    get objs(): Array<T> {
+        this.#objs.sort(sortProps);  // @TODO: cache this? lazy?
+        return this.#objs;
+
+        // Move all non-objects to the top
+/*
+        const rTop: Array<T> = [ ];
+        const rBottom: Array<T> = [ ];
+        for (const obj of this.#objs) {
+            if (obj instanceof ApiSubsection || obj instanceof ObjectExport) {
+                rBottom.push(obj);
+            } else {
+                rTop.push(obj);
+            }
+        }
+
+        return rTop.concat(rBottom);;
+*/
     }
 
     get anchor(): string { return this.#anchor; }
     get flatworm(): string { return this.#flatworm; }
     get title(): string { return this.#title; }
 
-    _addObject(item: T): void {
-        this.objs.push(item);
-    }
-
     // @TODO: should these throw if already set?
+    _addObject(item: T): void { this.#objs.push(item); }
     _setFlatworm(flatworm: string): void { this.#flatworm = flatworm; }
     _setTitle(title: string): void { this.#title = title; }
     _setAnchor(anchor: string): void { this.#anchor = anchor; }
@@ -1245,6 +1336,10 @@ export class ApiSection extends _ApiSection<ApiSubsection | Export> {
         this.dependencies = [ ];
         this.#path = ""
         this.#navTitle = null;
+    }
+
+    get subsections(): Array<Export | ApiSubsection> {
+        return this.objs;
     }
 
     get navTitle(): string {
@@ -1275,46 +1370,22 @@ export class ApiSection extends _ApiSection<ApiSubsection | Export> {
     }
 }
 
-export class API {
+export class ApiDocument {
     readonly basePath: string;
     readonly objs: Array<Export>;
 
     readonly toc: Map<string, ApiSection>;
 
+    get sections(): Array<ApiSection> {
+        return Array.from(this.toc.values());
+    }
+
     getExport(name: string): Export {
         const matches = this.objs.filter((e) => (e.name === name));
         if (matches.length !== 1) {
-            console.log("NOT FOUND", name, matches);
-            throw new Error("nothing found");
+            throw new Error(`No export found: ${ name }`);
         }
         return matches[0];
-    }
-
-    getSupers(name: string): Array<ObjectExport> {
-        const done: Set<string> = new Set();
-        const result: Array<ObjectExport> = [ ];
-        const recurse = (name: string) => {
-            let cls;
-            try {
-                cls = this.getExport(name);
-            } catch (error) { return; }
-
-            if (!(cls instanceof ObjectExport)) {
-                console.log("super not class", cls);
-                return;
-            }
-
-            if (done.has(cls.name)) { return; }
-            done.add(cls.name);
-            result.push(cls);
-
-            for (const s of cls.supers) { recurse(s); }
-        };
-        recurse(name);
-
-        result.shift();
-
-        return result;
     }
 
     constructor(basePath: string) {
@@ -1323,9 +1394,14 @@ export class API {
 
         const allExports = getExports(this.basePath)
 
+        // Map each ObjectExport to a list of supers, to be
+        // filled in all Exports are available.
+        const superMap: Map<ObjectExport, Array<string>> = new Map();
+
         const fileMap: Map<string, { jsdocs: string, exports: Set<string>, imports: Set<string> }> = new Map();
         const filenames: Array<string> = [ ];
 
+        // Load all jsdocs for each export
         for (const _filename in allExports) {
             const filename = relative(dirname(basePath), _filename);
             const exports = allExports[_filename];
@@ -1391,33 +1467,19 @@ export class API {
                     }
                     case "class": {
                         if (checkSkip(obj.name)) { break; }
-                        const ex = new ClassExport(filename, obj.lineno, obj.name, obj.jsdoc, obj.supers, obj.isAbstract)
+                        const ex = new ClassExport(filename, obj.lineno, obj.name, obj.jsdoc, obj.isAbstract)
+                        superMap.set(ex, obj.supers || [ ]);
                         objs.push(ex);
                         //files.get(filename).exports.push(ex);
                         break;
                     }
                     case "interface": {
                         if (checkSkip(obj.name)) { break; }
-                        const ex = new InterfaceExport("interface", filename, obj.lineno, obj.name, obj.jsdoc, obj.supers || [ ])
+                        const ex = new InterfaceExport(filename, obj.lineno, obj.name, obj.jsdoc)
+                        superMap.set(ex, obj.supers || [ ]);
                         objs.push(ex);
                         break;
                     }
-                    /*
-                    case "constructor": {
-                    throw new Error("HERE!?");
-                        if (checkSkip(obj.parentName)) { break; }
-
-                        const parent = getClass(obj.parentName);
-                        if (parent) {
-                            const params = obj.params.map((p: any) => new Param(p.name, p.type, p.optional));
-                            parent._setConstructor(new FunctionExport(
-                                filename, obj.lineno, "constructor",
-                                obj.jsdoc, obj.parentName, params, true
-                            ));
-                        }
-                        break;
-                    }
-                    */
                     case "property": {
                         if (checkSkip(obj.parentName) || obj.name == null) { break; }
                         const parent = getObject(obj.parentName);
@@ -1474,12 +1536,75 @@ export class API {
             for (const obj of objs) { this.objs.push(obj); }
         }
 
+        // Add supers
+        for (const [ ex, supers ] of superMap) {
+            for (let s of supers) {
+                let e: Export;
+                try {
+                    e = this.getExport(s);
+                } catch (error) {
+                    console.log(`WARNING: missing super for ${ ex.name } (${ s })`);
+                    continue;
+                }
+                if (!(e instanceof ObjectExport)) {
+                    console.log(`WARNING: invalid super type for ${ ex.name } (${ s })`)
+                    continue;
+                }
+                ex._addSuper(e);
+            }
+        }
+
+        // Do I still need this?
         for (const { exports, imports } of fileMap.values()) {
             for (const ex of exports) {
                 try {
                     imports.add(this.getExport(ex).filename);
                 } catch (error) {
-                    console.log("EE", ex, error.message);
+                    //console.log("EE", ex, error.message);
+                }
+            }
+        }
+
+        const missing: Map<string, Set<string>> = new Map();
+        const root = fileMap.get("index.ts").exports;
+        for (const [ filename, { exports } ] of fileMap) {
+            const match = filename.match(/^([a-z0-9_]+)\/index.ts$/i);
+            if (!match) { continue; }
+
+            for (const ex of exports) {
+                if (root.has(ex)) { continue; }
+                if (!missing.has(filename)) {
+                    missing.set(filename, new Set());
+                }
+                missing.get(filename).add(ex);
+            }
+        }
+
+        if (Array.from(missing).length) {
+            const filenames = Array.from(missing.keys());
+            filenames.sort();
+            console.log("WARNING: missing root exports");
+            for (const filename of filenames) {
+                const exports = missing.get(filename);
+
+                const types: Array<string> = [ ];
+                const exs: Array<string> = [ ];
+
+                for (const name of exports) {
+                    const ex = this.getExport(name);
+                    if (ex == null) { throw new Error(`bad thing: ${ name }`); }
+                    if (ex instanceof InterfaceExport || ex instanceof TypeExport) {
+                        types.push(name);
+                    } else {
+                        exs.push(name);
+                    }
+                }
+
+                for (const { kind, objs } of [ { kind: "", objs: exs.sort() }, { kind: "type ", objs: types.sort() } ]) {
+                    if (objs.length === 0) { continue; }
+                    console.log(`export ${ kind }{`);
+                    console.log(`    ${ objs.join(", ") }`);
+                    console.log(`} from "${ filename }"`); 
                 }
             }
         }
@@ -1648,9 +1773,9 @@ export class API {
         const sorted = Array.from(toc.keys());
         sorted.sort((a, b) => (a.localeCompare(b)));
         for (const filename of sorted) {
-            const { title, flatworm, objs } = toc.get(filename);
-            console.log(`${ filename }: ${ title }`)
-            console.log(`  - about: ${ flatworm }`);
+            const { objs } = toc.get(filename);
+            //console.log(`${ filename }: ${ title }`)
+            //console.log(`  - about: ${ flatworm }`);
             objs.sort((a, b) => {
                 let nameA: string, nameB: string;
                 if (a instanceof Export) {
@@ -1668,13 +1793,13 @@ export class API {
 
             for (const obj of objs) {
                 if (obj instanceof Export) {
-                    console.log(`  - ${ obj.name }`);
+                    //console.log(`  - ${ obj.name }`);
                 } else {
-                    console.log(`  - ${ obj.title }`);
+                    //console.log(`  - ${ obj.title }`);
                     obj.objs.sort((a, b) => (a.name.toLowerCase().localeCompare(b.name.toLowerCase())));
-                    for (const o of obj.objs) {
-                        console.log(`    - ${ o.name }`);
-                    }
+                    //for (const o of obj.objs) {
+                    //    console.log(`    - ${ o.name }`);
+                    //}
                 }
             }
 
@@ -1698,23 +1823,8 @@ export class API {
             obj.dump(1);
         }
     }
-/*
-    get filenames(): Array<string> {
-        return Object.keys(this.#exports);
-    }
-
-    exports(path: string): Array<string> {
-        const exports = this.#exports[path];
-        if (exports == null) { throw new Error("unknown filename"); }
-        return Array.from(exports);
-    }
-
-    getExport(path: string): null | FunctionExport | ClassExport | TypeExport {
-        return null;
-    }
-*/
 }
 
-//const api = new API("./test.ts");
-//api.dump();
-//console.log(api.getExport("FOO"));
+export function extractExports(basePath: string): Array<Export> {
+    return (new ApiDocument(basePath)).objs;
+}
