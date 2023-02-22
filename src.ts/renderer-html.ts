@@ -1,12 +1,13 @@
 
 // @TODO: Move link stuff to document
+// @TODO: Move TOC logic (including depth) to SectionWithBody
 
 import fs from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from 'url';
 
 import {
-    BodyContent, CodeContent,
+    Content, BodyContent, CodeContent,
     SectionWithBody, Section, Subsection, Exported,
 } from "./document.js";
 import {
@@ -20,11 +21,11 @@ import {
     Type, TypeBasic, TypeTodo, TypeFunction, TypeGroup,
     TypeIdentifier, TypeLiteral, TypeMapping, TypeWrapped
 } from "./jsdocs.js";
+import { OutputFile, Renderer } from "./renderer.js";
 
 import type { Script } from "./script.js";
 import type {
     Document,
-    Content
 } from "./document.js";
 
 
@@ -74,37 +75,15 @@ type TocEntry = {
     hidden?: boolean,
     current?: boolean
 };
-/*
-type __TocEntry = {
-    path: string;
-    link: string;
-    style: string;
-    title: string;
-};
-type __TOC = {
-  path: string;
-  entry: __TocEntry
-  section: ApiSection | Section;
-}
-*/
+
 type _TocOffset = { depth: number, start: number, end: number };
 
 // @TODO: Rename path => link or href?
 
-function prepareToc(section: Section, renderer: HtmlRenderer): Array<TocEntry> {
-    const countDepth = (entry: SectionWithBody & { path: string }) => {
-
+function prepareToc(renderer: HtmlRenderer, section?: Section): Array<TocEntry> {
+    const countDepth = (entry: SectionWithBody) => {
         const value = entry.path;
         let count = value.split("/#")[0].split("/").length - 1;
-        /*
-        let comps = value.split("#");
-        let count = comps.length - 1;
-
-        for (const comp of comps[0].split("/")) {
-            if (comp.trim()) { count++; }
-        }
-        */
-
         return count + entry.depth;
     };
 
@@ -119,14 +98,14 @@ function prepareToc(section: Section, renderer: HtmlRenderer): Array<TocEntry> {
             const { path, title } = entry;
 
             // Ignore the root
-            if (!path) { continue; }
+            if (!path || path.startsWith("#")) { continue; }
 
             // Get the depth and track the minimum depth
             const depth = countDepth(entry);
             if (minDepth === -1 || depth < minDepth) { minDepth = depth; }
 
             // Found the current entry
-            if (section.path === path) { current = i; parent = entry; }
+            if (section && section.path === path) { current = i; parent = entry; }
             i++
 
             const sub = (parent && entry.parent === parent);
@@ -149,6 +128,8 @@ function prepareToc(section: Section, renderer: HtmlRenderer): Array<TocEntry> {
             }
         }
     }
+
+    if (!section) { return result; }
 
     if (current === -1) {
         hideGrandkids({ depth: -1, start: 0, end: result.length });
@@ -224,16 +205,6 @@ function prepareToc(section: Section, renderer: HtmlRenderer): Array<TocEntry> {
     return result.filter((e) => (!e.hidden));
 }
 
-export class OutputFile {
-    readonly filename: string;
-    readonly content: string | Buffer;
-
-    constructor(filename: string, content: string | Buffer) {
-        this.filename = filename;
-        this.content = content;
-    }
-}
-
 export type Link = {
     title: string;
     link: string;  // rename to path
@@ -248,48 +219,56 @@ interface Linkable {
 };
 
 const foldType: Record<ExportType, string> = {
+    // Bare types
     "const": "CONSTANTS",
-
-//    "interface": "TYPES",
-    "interface": "",
     "type": "TYPES",
-
     "function": "FUNCTIONS",
 
+    // Objects (Classes and Interfaces)
     "property": "PROPERTIES",
-
-    "constructor": "CREATING INSTANCES",
-    "create": "CREATING INSTANCES",
-
     "method": "METHODS",
 
+    // Classes
+    "constructor": "CREATING INSTANCES",
+    "create": "CREATING INSTANCES",
     "static method": "STATIC METHODS",
 
-//    "abstract class": "ABSTRACT CLASS",
-//    "class": "CLASS"
+    // Give these the Subsetion treatment
+    "interface": "",
     "abstract class": "",
     "class": ""
 };
 
 
-class HtmlGenerator {
+class Generator {
     readonly renderer: HtmlRenderer;
-    readonly section: Section;
-    readonly #output: Array<string>;
 
-    toc: Array<SectionWithBody & { path: string }>;
+    toc: Array<SectionWithBody>;
 
+    #output: Array<string>;
     #links: Array<Map<string, Link>>;
 
-    constructor(renderer: HtmlRenderer, section: Section) {
+    constructor(renderer: HtmlRenderer) {
         this.renderer = renderer;
-        this.section = section;
+
+        this.toc = [ ];
+
         this.#output = [ ];
         this.#links = [ new Map() ];
-        this.toc = [ ];
     }
 
+    clear(): void { this.#output = [ ]; }
     get output(): string { return this.#output.join(""); }
+
+    append(line: string): void { this.#output.push(line); }
+
+    resolveLink(link: string): string {
+        return this.renderer.resolveLink(link);
+    }
+
+    resolveAnchor(item: SectionWithBody): string {
+        return item.anchor || item.sid;
+    }
 
     getLink(anchor: string): null | Link {
         for (const links of this.#links) {
@@ -299,7 +278,7 @@ class HtmlGenerator {
         return this.renderer.getLink(anchor);
     }
 
-    pushLinks(exported: ObjectExport): void {
+    pushLinks(basePath: string, exported: ObjectExport): void {
         const links = new Map();
         this.#links.unshift(links);
 
@@ -308,7 +287,7 @@ class HtmlGenerator {
                 if (links.has(child.name)) { continue; }
                 links.set(child.name, {
                     title: child.name,
-                    link: `${ this.section.path }#${ child.id }`,
+                    link: `${ basePath }#${ child.id }`, //child.path,
                     style: "code"
                 });
             }
@@ -322,9 +301,54 @@ class HtmlGenerator {
         this.#links.shift();
     }
 
-    append(line: string): void {
-        this.#output.push(line);
+    appendChildren(type: "section" | "subsection" | "export", item: SectionWithBody): void {
+        let ex: null | Exported = null;
+        if (item instanceof Exported) {
+            ex = item;
+            this.pushLinks(item.path, <ObjectExport>(item.exported));
+        }
+
+        this.toc.push(item);
+
+        this.appendLinkable(item, ex);
+        let lastType: string = "";
+        for (const sub of item) {
+            if (sub instanceof Exported) {
+                const type = foldType[sub.exported.type];
+                if (type !== lastType && type) {
+                    lastType = type;
+                    this.appendHeading(type);
+                }
+                if (sub.recursive) {
+                    this.appendChildren("export", sub);
+                } else {
+                    this.appendExported(sub);
+                }
+            } else {
+                this.appendChildren("subsection", sub);
+            }
+        }
+        if (ex) { this.popLinks(); }
     }
+
+    // Appends a heading
+    appendHeading(title: string): void {
+    }
+
+    // Appends a non-recursive Exported (e.g. function or type)
+    appendExported(exported: Exported): void {
+    }
+
+    // Appends a linkable section
+    appendLinkable(item: SectionWithBody, exported?: null | Exported): void {
+    }
+}
+
+class HtmlGenerator extends Generator {
+
+//    constructor(renderer: HtmlRenderer) {
+//        super(renderer);
+//    }
 
     renderNode(node: Node): string {
         if (node instanceof TextNode) { return node.content; }
@@ -355,10 +379,10 @@ class HtmlGenerator {
                     external = "external";
                     target = ` target="_blank"`;
                 }
-                return `<span class="${ extraCls }style-link style-${ style } ${ external }"${extraAttr}><a class="link-lit" href="${ this.renderer.resolveLink(link) }"${ target }>${ content }</a></span>`;
+                return `<span class="${ extraCls }style-link style-${ style } ${ external }"${extraAttr}><a class="link-lit" href="${ this.resolveLink(link) }"${ target }>${ content }</a></span>`;
             }
 
-            console.log(`WARNING: missing link ${ JSON.stringify(node.link) } (section: ${ this.section.path })`);
+            console.log(`WARNING: missing link ${ JSON.stringify(node.link) }`);
 
             return `<span class="style-link missing-link">${ content }</span>`;
         }
@@ -399,14 +423,14 @@ class HtmlGenerator {
             let relation = type.relation;
             const link = this.renderer.getLink(relation);
             if (link) {
-                relation = `<a class="link-lit" href="${ this.renderer.resolveLink(link.link) }">${ relation }</a>&thinsp;`;
+                relation = `<a class="link-lit" href="${ this.resolveLink(link.link) }">${ relation }</a>&thinsp;`;
             }
             return `<span class="type group">${ relation }&lt;&thinsp;${ types.join(", ") }&thinsp;&gt;</span>`
 
         } else if (type instanceof TypeIdentifier) {
             const link = this.renderer.getLink(type.type);
             if (link) {
-                return `<span class="type identifier"><a class="link-lit" href="${ this.renderer.resolveLink(link.link) }">${ type.type }</a></span>`
+                return `<span class="type identifier"><a class="link-lit" href="${ this.resolveLink(link.link) }">${ type.type }</a></span>`
             }
             return `<span class="type identifier">${ type.type }</span>`
         } else if (type instanceof TypeLiteral) {
@@ -417,15 +441,19 @@ class HtmlGenerator {
             const mapping = keys.map((k) => `${ k }: ${ this.renderType(type.children[k]) } `);
             return `<span class="type mapping">{ ${ mapping.join(", ") } }</span>`
         } else if (type instanceof TypeWrapped) {
-            return `<span class="type wrapped">${ type.wrapper }&lt;${ this.renderType(type.child) } }&gt;</span>`
+            return `<span class="type wrapped">${ type.wrapper }&lt;${ this.renderType(type.child) }&gt;</span>`
         }
         console.log(type);
         throw new Error("unhandled");
     }
 
+    appendHeading(title: string): void {
+        this.append(`<div class="title-heading">${ title }</div>`)
+    }
+
     appendNodes(nodes: Array<Node>): void {
         for (const node of nodes) {
-            this.append(`<p>${ this.renderNode(node) }</p>`);
+            this.append(`<p><a name="nid_${ node.id }"></a>${ this.renderNode(node) }</p>`);
         }
     }
 
@@ -440,9 +468,7 @@ class HtmlGenerator {
     appendExported(exported: Exported): void {
         const ex = exported.exported;
 
-        const type = "todo"
-
-        this.append(`<div class="type-${ type } show-links">`);
+        this.append(`<div class="type-export show-links">`);
 
         this.append(`<div class="notranslate signature" translate="no">`);
         this.append(`<a class="link anchor" name="${ ex.id }" href="#${ ex.id }">&nbsp;</a>`);
@@ -506,10 +532,12 @@ class HtmlGenerator {
     appendContent(contents: Array<Content>): void {
         for (const content of contents) {
             if (content instanceof BodyContent) {
+                let addName = `<a name="${ content.anchor }"></a>`;
                 if (content.tag !== "null") {
-                    this.append(`<div class="title-${ content.tag }">${ this.renderNode(content.titleNode) }</div>`);
+                    this.append(`<div class="title-${ content.tag }">${ addName }${ this.renderNode(content.titleNode) }</div>`);
+                    addName = "";
                 }
-                this.append(`<div>`);
+                this.append(`<div>${ addName }`);
                 this.appendNodes(content.body);
                 this.append(`</div>`);
 
@@ -526,21 +554,22 @@ class HtmlGenerator {
         }
     }
 
-    appendLinkable(type: string, anchor: null | string, title: Node, body: Array<Content>, exported?: null | Exported) {
+    appendLinkable(item: SectionWithBody, exported?: null | Exported) {
         const objExport: null | ObjectExport = (exported && exported.exported instanceof ObjectExport) ? exported.exported: null;
 
-        this.append(`<div class="type-${ type } show-links">`);
+        this.append(`<div class="type-${ item.directive } show-links">`);
 
-        this.append(`<div class="title-${ type }">`);
-        if (anchor) {
-            const link = this.renderer.getLink(anchor);
-            this.append(`<a class="link anchor" name="${ anchor }" href="${ this.renderer.resolveLink(link.link) }">&nbsp;</a>`);
-        }
+        this.append(`<div class="title-${ item.directive }">`);
+
+        //const link = this.renderer.getLink(item.anchor);
+        //this.append(`<a class="link anchor" name="${ item.anchor }" href="${ this.resolveLink(link.link) }">&nbsp;</a>`);
+        const anchor = this.resolveAnchor(item);
+        this.append(`<a class="link anchor" name="${ anchor }" href="#${ anchor }">&nbsp;</a>`);
 
         if (objExport) {
             this.append(`<span class="type">${ objExport.type }</span>&nbsp;`);
         }
-        this.append(this.renderNode(title));
+        this.append(this.renderNode(item.titleNode));
         this.append(`</div>`);
 
         if (objExport && objExport.supers.length) {
@@ -551,7 +580,7 @@ class HtmlGenerator {
                 comma = true;
 
                 const link = this.renderer.getLink(s.id);
-                if (link) { this.append(`<a class="link-lit" href="${ this.renderer.resolveLink(link.link) }">`); }
+                if (link) { this.append(`<a class="link-lit" href="${ this.resolveLink(link.link) }">`); }
                 this.append(`<span class="super">${ s.name }</a>`);
                 if (link) { this.append(`</a>`); }
             }
@@ -559,7 +588,7 @@ class HtmlGenerator {
         }
 
         this.append(`<div class="docs">`);
-        this.appendContent(body);
+        this.appendContent(item.body);
         this.append(`</div>`);
 
         if (exported) {
@@ -571,48 +600,35 @@ class HtmlGenerator {
         this.append(`</div>`);
     }
 
+    render(section: Section): string {
+        this.clear();
+        this.appendChildren("section", section);
+        return this.output;
+    }
+}
+
+class WrappedHtmlGenerator extends HtmlGenerator {
     appendHeader(): void {
-        //const prefix = this.renderer.document.config.prefix;
         this.append(`<html><head>`);
-        this.append(`<link rel="stylesheet" href="${ this.renderer.resolveLink("static/style.css") }">`);
+        this.append(`<link rel="stylesheet" href="${ this.resolveLink("static/style.css") }">`);
         this.append(`<meta property="og:title" content="Documentation">`);
         this.append(`<meta property="og:description" content="Documentation for ethers, a complete, tiny and simple Ethereum library.">`);
-        this.append(`<meta property="og:image" content="${ this.renderer.resolveLink("static/social.jpg") }">`);
+        this.append(`<meta property="og:image" content="${ this.resolveLink("static/social.jpg") }">`);
         this.append(`</head><body>`);
     }
 
-    appendSidebar(): void {
+    appendSidebar(target: string, title: string, section?: Section): void {
         const config = this.renderer.document.config;
         this.append(`<div class="sidebar"><div class="header">`);
-        this.append(`<a class="logo" href="${ this.renderer.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
+        this.append(`<a class="logo" href="${ this.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
         this.append(`</div><div class="toc">`);
-        this.append(`<div class="title"><a href="${ this.renderer.resolveLink("") }">DOCUMENTATION</a></div>`);
+        this.append(`<div class="title"><a href="${ this.resolveLink("") }">DOCUMENTATION</a></div>`);
 
-        for (const { depth, sub, dedent, path, title, current, selected, highlit } of prepareToc(this.section, this.renderer)) {
-            this.append(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }${ dedent ? " dedent": "" }${ sub ? " sub": "" }"><a href="${ this.renderer.resolveLink(path) }">${ title }</a></div>`);
-            if (!current) { continue; }
-            /*
-            if (section instanceof ApiSection) {
-                const subToc = addExports(api, [ ], links, section.objs);
-                for (let i = 0; i < subToc.length; i++) {
-                    const { path, title } = subToc[i];
-                    const dedent = (i === (subToc.length - 1)) ? " dedent": "";
-                    this.append(`<div class="depth-${ depth + 1 } highlight sub${ dedent }"><a href="${ path }">${ title }</a></div>`);
-                }
-            } else {
-                const subs = section.subsections;
-                for (let i = 0; i < subs.length; i++) {
-                    const sub = subs[i];
-                    const anchor = links.get(sub.anchor);
-                    if (anchor == null) { continue; }
-                    const dedent = (i === (subs.length - 1)) ? " dedent": "";
-                    this.append(`<div class="depth-${ depth + 1 } highlight sub${ dedent }"><a href="${ anchor.link }">${ sub.title }</a></div>`);
-                }
-            }
-            */
+        for (const { depth, sub, dedent, path, title, current, selected, highlit } of prepareToc(this.renderer, section)) {
+            this.append(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }${ dedent ? " dedent": "" }${ sub ? " sub": "" }"><a href="${ this.resolveLink(path) }">${ title }</a></div>`);
         }
 
-        this.append(`</div></div>`);
+        this.append(`</div><div class="alt-link"><a href="${ target }">${ title }</a></div></div>`);
     }
 
     beginContent(): void {
@@ -620,15 +636,15 @@ class HtmlGenerator {
     }
 
     endContent(): void {
-       this.append(`</div>`);
+        this.append(`</div>`);
     }
 
-    appendBreadcrumbs(): void {
+    appendBreadcrumbs(section: Section): void {
        this.append(`<div class="breadcrumbs">`);
 
        // The breadcrumbs; but on the root drop the empty string
        // since the root is always included
-       const breadcrumbs = this.section.path.split("/").filter(Boolean);
+       const breadcrumbs = section.path.split("/").filter(Boolean);
 
         for (let i = 0; i <= breadcrumbs.length; i++) {
             let path = breadcrumbs.slice(0, i).join("/");
@@ -636,110 +652,90 @@ class HtmlGenerator {
                 const link = this.renderer.getLinkable(path);
                 if (link == null) { continue; }
                 if (path !== "") { path += "/"; }
-                this.append(`<a href="${ this.renderer.resolveLink(path) }">${ link.navTitle || link.title }</a> <span class="symbol">&raquo;</span>`);
+                this.append(`<a href="${ this.resolveLink(path) }">${ link.navTitle || link.title }</a> <span class="symbol">&raquo;</span>`);
             } else {
-                this.append(`<i>${ this.section.title }</i>`);
+                this.append(`<i>${ section.title }</i>`);
             }
         }
 
        this.append(`</div>`);
     }
 
-    appendCopyright(): void {
+    appendCopyright(section: Section): void {
         const paths = this.renderer.document.sections.map((s) => s.path);
-        const i = paths.indexOf(this.section.path);
+        const i = paths.indexOf(section.path);
 
         let prev = (i > 0) ? this.renderer.getLinkable(paths[i - 1]): null;
         let next = (i < paths.length - 1) ? this.renderer.getLinkable(paths[i + 1]): null;
 
         this.append(`<div class="footer"><div class="nav"><div class="clearfix"></div>`);
         if (prev) {
-            this.append(`<div class="previous"><a href="${ this.renderer.resolveLink(prev.path) }"><span class="arrow">&larr;</span>&nbsp;${ prev.title }</a></div>`);
+            this.append(`<div class="previous"><a href="${ this.resolveLink(prev.path) }"><span class="arrow">&larr;</span>&nbsp;${ prev.title }</a></div>`);
         }
         if (next) {
-            this.append(`<div class="next"><a href="${ this.renderer.resolveLink(next.path) }">${ next.title }<span class="arrow">&rarr;</span></a></div>`);
+            this.append(`<div class="next"><a href="${ this.resolveLink(next.path) }">${ next.title }<span class="arrow">&rarr;</span></a></div>`);
         }
-        this.append(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ getTimestamp(this.section.mtime) }.</div></div>`);
+        this.append(`<div class="clearfix"></div></div><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ getTimestamp(section.mtime) }.</div></div>`);
     }
 
     appendFooter(): void {
-        this.append(`<script type="module" src="${ this.renderer.resolveLink("static/script-v2.js") }"></script></body></html>`);
+        this.append(`<script type="module" src="${ this.resolveLink("static/script-v2.js") }"></script></body></html>`);
     }
 
-    appendChildren(type: string, item: SectionWithBody): void {
-        let ex: null | Exported = null;
-        if (item instanceof Exported) {
-            ex = item;
-            this.pushLinks(<ObjectExport>(item.exported));
-        }
+    render(section: Section): string {
+        this.clear();
 
-        try {
-            const path = (<any>item).path;
-            if (path) {
-               this.toc.push(<any>item);
-            }
-        } catch (e) { }
-
-
-        this.appendLinkable(type, item.anchor, item.titleNode, item.body, ex);
-        let lastType: string = "";
-        for (const sub of item) {
-            if (sub instanceof Exported) {
-                const type = foldType[sub.exported.type];
-                if (type !== lastType && type) {
-                    lastType = type;
-                    this.append(`<div class="title-heading">${ type }</div>`)
-                }
-                if (sub.recursive) {
-                    this.appendChildren("export", sub);
-                } else {
-                    this.appendExported(sub);
-                }
-            } else {
-                this.appendChildren("subsection", sub);
-            }
-        }
-        if (ex) { this.popLinks(); }
-    }
-
-    render(): void {
-        const sec = this.section;
         this.appendHeader();
-        this.appendSidebar();
+        this.appendSidebar(this.resolveLink("single-page"), "Single Page", section);
         this.beginContent();
-        this.appendBreadcrumbs();
+        this.appendBreadcrumbs(section);
 
-        //this.appendOrdered(sec);
-        this.appendChildren("section", sec);
+        this.appendChildren("section", section);
 
-        this.appendCopyright();
-
+        this.appendCopyright(section);
         this.endContent();
-
         this.appendFooter();
+
+        return this.output;
     }
 }
 
-export class TocGenerator extends HtmlGenerator {
-    // Prevent storing any content
-    append(line: string): void { }
+function normalizeAnchor(anchor: string): string {
+    return anchor.replace("/#", "#").replace(/#/g, "__").replace(/\//g, "_");
+}
 
-    // Prevent infinite recursion
-    appendSidebar(): void { }
+class InPageHtmlGenerator extends HtmlGenerator {
+    resolveAnchor(item: SectionWithBody): string {
+        return normalizeAnchor(item.path);
+    }
 
-    render(): void {
-        this.appendChildren("section", this.section);
+    resolveLink(link: string): string {
+        // Static file
+        if (link.indexOf(".") >= 0) { return super.resolveLink(link); }
+
+        return `${ super.resolveLink("single-page") }#${ normalizeAnchor(link) }`;
     }
 }
 
-export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }> {
-    readonly document: Document;
+class InPageWrappedHtmlGenerator extends WrappedHtmlGenerator {
+    resolveAnchor(item: SectionWithBody): string {
+        return normalizeAnchor(item.path);
+    }
+
+    resolveLink(link: string): string {
+        // Static file
+        if (link.indexOf(".") >= 0) { return super.resolveLink(link); }
+        return `${ super.resolveLink("single-page") }#${ normalizeAnchor(link) }`;
+    }
+}
+
+export class HtmlRenderer extends Renderer implements Iterable<SectionWithBody> {
 
     #links: Map<string, Link>;
-    #targets: Array<SectionWithBody & { path: string }>;
+    #targets: Array<SectionWithBody>;
 
     constructor(document: Document) {
-        this.document = document;
+        super(document);
 
         // Create a map of all link anchors
         this.#links = new Map(document.config.links);
@@ -801,8 +797,8 @@ export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }
 
         // Build TOC
         for (const section of document) {
-            const toc = new TocGenerator(this, section);
-            toc.render();
+            const toc = new Generator(this);
+            toc.appendChildren("section", section);
             for (const link of toc.toc) {
                 this.#targets.push(link);
             }
@@ -813,7 +809,7 @@ export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }
 
     get length(): number { return this.#targets.length; }
 
-    [Symbol.iterator](): Iterator<SectionWithBody & { path: string }> {
+    [Symbol.iterator](): Iterator<SectionWithBody> {
         let index = 0;
         return {
             next: () => {
@@ -835,12 +831,11 @@ export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }
         return matching[0];
     }
 
-    resolveLink(href: string): string {
-        // @TODO: Use config.prefix
-        return `/${ href }`;
-    }
-
     render(): Array<OutputFile> {
+        const rewrite = (filename: string) => {
+            return this.resolveLink(filename).substring(1);
+        };
+
         const output: Array<OutputFile> = [ ];
 
         const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -860,14 +855,14 @@ export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }
             "liberation/LiberationMono-Regular.ttf",
             "liberation/LiberationMono-BoldItalic.ttf",
 
-    //        "search.js",
+            "search.js",
     //        "script-v2.js",
             "style.css",
         ].forEach((_filename) => {
             const filename = resolve(__dirname, "../static", _filename);
             const target = join("static", _filename);
             const content = fs.readFileSync(filename);
-            output.push(new OutputFile(target, content));
+            output.push(new OutputFile(rewrite(target), content));
         });
 
         const config = this.document.config;
@@ -875,15 +870,40 @@ export class HtmlRenderer implements Iterable<SectionWithBody & { path: string }
             const filename = config.resolve(_filename);
             const target = join("static", _filename);
             const content = fs.readFileSync(filename);
-            output.push(new OutputFile(target, content));
+            output.push(new OutputFile(rewrite(target), content));
         });
 
         for (const section of this.document) {
             const filename = section.path; // @TODO: Add prefix
-            const content = new HtmlGenerator(this, section);
-            content.render();
-            output.push(new OutputFile(filename, content.output));
+            const content = new WrappedHtmlGenerator(this);
+            content.render(section);
+            output.push(new OutputFile(rewrite(filename), content.output));
         }
+
+        // Render single-page HTML
+        {
+            const single = new InPageWrappedHtmlGenerator(this);
+            single.clear();
+            single.appendHeader();
+            single.appendSidebar(this.resolveLink(""), "Split Pages");
+            single.beginContent();
+            single.append(`<div class="breadcrumbs"><i>Documentation (single page)</i></div>`);
+            let mtime = 0;
+            for (const section of this.document) {
+                if (section.mtime > mtime) { mtime = section.mtime; }
+                const inpage = new InPageHtmlGenerator(this);
+                const content = inpage.render(section);
+                single.append(content);
+            }
+
+            single.append(`<div class="footer"><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ getTimestamp(mtime) }.</div></div>`);
+
+            single.endContent();
+            single.appendFooter();
+            let html = single.output.replace("<body>", '<body class="single-page">');
+            output.push(new OutputFile(rewrite("single-page"), html));
+        }
+
         return output;
     }
 }

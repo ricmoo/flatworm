@@ -1,6 +1,34 @@
-import { CodeFragment, Document, FragmentType } from "./document";
 
-import { File, Renderer } from "./renderer";
+import { OutputFile, Renderer } from "./renderer.js";
+import {
+    CodeContent, SectionWithBody
+} from "./document.js";
+
+import type { Content, Document, Section } from "./document.js";
+
+const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+// Remove export later
+export function toB64(value: number): string {
+    let result = "";
+    while (value) {
+        result = b64[value % 64] + result;
+        value = Math.trunc(value / 64);
+    }
+    return result;
+}
+
+export function fromB64(value: string): number {
+    let result = 0;
+    for (let i = 0; i < value.length; i++) {
+        result *= 64;
+        result += b64.indexOf(value[i]);
+    }
+    return result;
+}
+//for (let i = 0; i < 1000; i++) {
+//    console.log(i, i.toString().length, toB64(i).length, toB64(i), fromB64(toB64(i)));
+//}
 
 export type SummaryBlock = {
     link: string;
@@ -13,10 +41,10 @@ export type Summary = {
 };
 
 export class SearchRenderer extends Renderer {
-    constructor(filename?: string) {
-        super(filename || "search.json");
+    constructor(document: Document) {
+        super(document);
     }
-
+/*
     renderDocument(document: Document): Array<File> {
         const summaries: Array<Summary> = [ ];
         const indices: { [ keyword: string ]: Array<string> } = { };
@@ -131,7 +159,103 @@ export class SearchRenderer extends Renderer {
             }
 
         });
+    }
+*/
 
+    render(): Array<OutputFile> {
+        // Summary of each paragraph
+        const summaries: Array<Summary> = [ ];
+        const indices: { [ keyword: string ]: Array<string> } = { };
+        const compound: Record<string, boolean> = { };
+
+        let section: Section = this.document.sections[0];
+        let wordCount = 0;
+        let link = "";
+        let summary: Summary = { title: "", blocks: [ ] };
+
+        const addWord = (word: string, tag: string) => {
+            // Words that collide with JavaScript built-ins
+            // (such as `prototype` can cause problems, so
+            // we add an underscore to keep things safe.
+            word = "_" + word.toLowerCase();
+
+            if (!indices[word]) { indices[word] = [ ]; }
+            indices[word].push(tag);
+        };
+
+        const addBody = (body: Array<Content>) => {
+            for (const p of body) {
+                if (p instanceof CodeContent) { continue; }
+                for (let text of p.text.split(/\.\s+/g)) {
+                    text = text.trim() + ".";
+                    if (text === ".") { continue; }
+
+                    let localLink = link;
+                    if (!localLink) {
+                        localLink = `${ section.path }/${ p.anchor }`;
+                    }
+
+                    summary.blocks.push({ link: localLink, text });
+                    //console.log({ link: localLink, text });
+                    //console.log();
+
+                    text.replace(/([a-z][a-z0-9]+)/ig, (all, word) => {
+                        // After more than 100 words into a section, stop
+                        // linking to the top of the section and link to
+                        // the closest paragraph
+                        wordCount++;
+                        if (wordCount > 100) { link = null; }
+
+                        const tag = `${ summaries.length - 1 }/${ summary.blocks.length - 1 }`
+
+                        addWord(word, tag);
+
+                        return "";
+                    });
+
+                    /*
+                    summary.blocks.push({ link, text });
+
+                    sentence.replace(/([a-z][a-z0-9]+)/ig, (all, word) => {
+                        word = "_" + word.toLowerCase();
+
+                        // The tag to the summary block
+                        const tag = `${ summaries.length }/${ summary.blocks.length - 1 }`
+                        if (baseTag == null) { baseTag = tag; }
+
+                        // Link the word to the tag
+                        if (indices[word] == null) { indices[word] = [ ]; }
+                        if (indices[word].indexOf(tag) === -1) {
+                            indices[word].push(tag);
+                        }
+
+  return "";
+                    })
+                    */
+                }
+            }
+        };
+
+        const addSection = (sec: SectionWithBody) => {
+            try {
+                link = this.resolveLink(sec.path);
+            } catch (error) {
+                link = null;
+            }
+
+// @TODO: Add >>
+            summary = { title: sec.title, blocks: [ ] };
+            summaries.push(summary);
+
+            addBody(sec.body);
+            sec.children.forEach(addSection);
+        };
+
+        for (const sec of this.document) {
+            section = sec;
+            wordCount = 0;
+            addSection(sec);
+        }
 
         const search = {
             version: "0.1",
@@ -139,11 +263,10 @@ export class SearchRenderer extends Renderer {
             compound: Object.keys(compound).sort(),
             indices: indices
         };
-
-        //console.log(search);
+        //console.dir(search, { depth: null });
 
         return [ {
-            filename: document.config.getPath("/" + this.filename).substring(1),
+            filename: "search.json",
             content: JSON.stringify(search)
         } ];
     }

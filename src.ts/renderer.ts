@@ -1,3 +1,4 @@
+/*
 "use strict";
 
 import type { Document, Fragment, Page } from "./document";
@@ -81,4 +82,37 @@ export class Renderer {
     getSymbol(name: string): string {
         return name;
     }
+}
+*/
+
+import { Document } from "./document.js";
+
+export class OutputFile {
+    readonly filename: string;
+    readonly content: string | Buffer;
+
+    constructor(filename: string, content: string | Buffer) {
+        this.filename = filename;
+        this.content = content;
+    }
+}
+
+export abstract class Renderer {
+    readonly document: Document;
+
+    constructor(document: Document) {
+        this.document = document;
+    }
+
+    resolveLink(href: string): string {
+        let link = `${ this.document.config.prefix }/${ href }`;
+        if (link.indexOf("#") === -1 && link.indexOf(".") === -1 && !link.endsWith("/")) {
+            link += "/";
+        } else if (link.indexOf("#") >= 0 && link.indexOf("/#") === -1) {
+            link = link.replace("#", "/#");
+        }
+        return link;
+    }
+
+    abstract render(): Array<OutputFile>;
 }

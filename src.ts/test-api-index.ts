@@ -1,3 +1,4 @@
+/*
 import fs from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from 'url';
@@ -13,10 +14,12 @@ import {
     parseMarkdown
 } from "./markdown.js";
 
+//import { SearchBuilder } from "./search.js";
+
 import type { Script } from "./script2.js";
 
 import {
-    API,
+    ApiDocument,
     ClassExport, ConstExport, PropertyExport, Export, FunctionExport,
     ObjectExport, ReturnsExport,
     TypeExport,
@@ -172,7 +175,7 @@ function CamelCase(v: string): string {
     return words.join("");
 }
 
-export function getIndex(api: API): Array<IndexGroup> {
+export function getIndex(api: ApiDocument): Array<IndexGroup> {
     const groups: Map<string, IndexGroup> = new Map();
     const result: Array<IndexGroup> = [ ];
 
@@ -204,7 +207,7 @@ export function getIndex(api: API): Array<IndexGroup> {
             const supers: Array<string> = [ ];
             const superProps: Set<string> = new Set();
             const superStaticProps: Set<string> = new Set();
-            for (const s of api.getSupers(obj.name)) {
+            for (const s of obj.allSupers) {//of api.getSupers(obj.name)) {
                 supers.push(s.name);
                 for (const n of s.methods.keys()) { superProps.add(n); }
                 for (const n of s.properties.keys()) { superProps.add(n); }
@@ -300,20 +303,12 @@ function nameCompare(a: string, b: string): number {
     return a.localeCompare(b);
 }
 
-/*
-function repeat(c: string, width: number): string {
-    let result = c;
-    while (result.length < width) { result += result; }
-    return result.substring(0, width);
-}
-*/
-
 function htmlify(value: string): string {
     if (value == null) { return "undef"; }
     return value.replace(/&/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function generateIndex(api: API) {
+export function generateIndex(api: ApiDocument) {
     const index = getIndex(api);
     ///console.log("=====================");
     const output: Array<string> = [ ];
@@ -525,7 +520,7 @@ function prepareLocalToc(path: string, toc: Array<{ path: string, entry: TocEntr
     return result.filter((e) => (!e.hidden));
 }
 
-function addHeader(api: API, config: Config, output: Array<string>, section: ApiSection | Section, links: LinkMap, toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): void {
+function addHeader(api: ApiDocument, config: Config, output: Array<string>, section: ApiSection | Section, links: LinkMap, toc: Array<{ path: string, entry: TocEntry, section: ApiSection | Section }>): void {
     // Remove the root "documentation" node and get just the entries
     //const toc = _toc.filter((e) => (!!e.path)).map((e) => e.entry);
 
@@ -605,7 +600,7 @@ function addSection(output: Array<string>, links: LinkMap, section: Section): vo
         } else {
             output.push(`<div class="title">${ renderNode(subsection.titleNode, links) }</div>`);
         }
-        output.push(`<div class="docs">${ renderContents(subsection.contents, links) }</div>`);
+        output.push(`<div class="docs">${ renderContents(subsection.body, links) }</div>`);
         output.push(`</div>`);
     }
 }
@@ -702,7 +697,7 @@ function addReturnsExport(output: Array<string>, links: LinkMap, obj: ReturnsExp
 }
 
 // @TODO: remove API since supers exists on obj
-function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: ObjectExport): Omit<TocEntry, "path"> {
+function addObjectExport(api: ApiDocument, output: Array<string>, _links: LinkMap, obj: ObjectExport): Omit<TocEntry, "path"> {
     const name = obj.name;
     const toc: Omit<TocEntry, "path"> = { link: `#${ name }`, title: name, style: "code" };
 
@@ -746,7 +741,7 @@ function addObjectExport(api: API, output: Array<string>, _links: LinkMap, obj: 
     }
 
     const superProps: Set<string> = new Set();
-    const supers = api.getSupers(obj.name);
+    const supers = obj.allSupers;
     if (supers.length) {
         output.push(`<div class="supers">inherits from`);
         let comma = "";
@@ -859,7 +854,7 @@ export type TocEntry = {
 };
 
 // @TODO: remove api; supers is on obj
-function addExports(api: API, output: Array<string>, links: LinkMap, objs: Array<Export | ApiSubsection>): Array<Omit<TocEntry, "path">> {
+function addExports(api: ApiDocument, output: Array<string>, links: LinkMap, objs: Array<Export | ApiSubsection>): Array<Omit<TocEntry, "path">> {
     const toc = [ ];
 
     // Show all types
@@ -947,34 +942,14 @@ function getTimestamp(value: number): string {
     ].join("");
 }
 
-export async function generate(api: API, doc: Document, config: Config) {
+export async function generate(api: ApiDocument, doc: Document, config: Config) {
     const BASE_URL = config.srcBaseUrl;
 
     const toc = api.toc;
 
 // @TODO: use obj.id
     const links = config.links;
-/*
-    for (const section of doc.sections) {
-        const anchor = section.anchor;
-        if (!anchor) { continue; }
-        links.set(section.anchor, {
-            link: section.path,
-            style: "normal",
-            title: section.title
-        });
 
-        for (const subsection of section.subsections) {
-            const anchor = subsection.anchor;
-            if (!anchor) { continue; }
-            links.set(section.anchor, {
-                link: `${ section.path }#${ anchor }`,
-                style: "normal",
-                title: section.title
-            });
-        }
-    }
-*/
     const addLink = (filename: string, obj: Export | ApiSubsection) => {
         if (obj instanceof ObjectExport) {
             links.set(obj.name, {
@@ -1116,7 +1091,6 @@ export async function generate(api: API, doc: Document, config: Config) {
             });
         }
     }
-    console.log("Links", links);
 
     for (const [ path, section ] of toc) {
         const filename = join("/", config.prefix, path + "/");
@@ -1125,15 +1099,13 @@ export async function generate(api: API, doc: Document, config: Config) {
         mainToc.push({ path, entry, section });
 
         if (section.anchor) {
-            /*
-            addExports([ ], links, section.objs).forEach((entry) => {
-                mainToc.push({
-                    link: `${ filename }#${ entry.link }`,
-                    title: entry.title,
-                    style: "normal"
-                });
-            });
-            */
+            //addExports([ ], links, section.objs).forEach((entry) => {
+            //    mainToc.push({
+            //        link: `${ filename }#${ entry.link }`,
+            //        title: entry.title,
+            //        style: "normal"
+            //    });
+            //});
 
             links.set(section.anchor, entry);
         }
@@ -1143,7 +1115,8 @@ export async function generate(api: API, doc: Document, config: Config) {
         }
     }
 
-    const pris: Map<string, number> = mainToc.reduce((accum, { entry, section }) => {
+    const pris: Map<string, number> = mainToc.reduce((accum, { 
+    entry, section }) => {
         if (section instanceof Section) {
             accum.set(entry.link, section.priority);
         }
@@ -1199,6 +1172,8 @@ export async function generate(api: API, doc: Document, config: Config) {
         return latest;
     };
 
+//    const searcher = new SearchBuilder();
+
     for (let i = 0; i < mainToc.length; i++) {
         const { path, section } = mainToc[i];
 
@@ -1211,9 +1186,6 @@ export async function generate(api: API, doc: Document, config: Config) {
         } else {
             addSectionInfo(output, links, section);
             const localToc = addExports(api, [ ], links, section.objs);
-            /*.map((e) => {
-                
-            });*/
 
             output.push(`<ul class="toc">`)
             for (const entry of localToc) {
@@ -1276,25 +1248,18 @@ export async function generate(api: API, doc: Document, config: Config) {
         fs.writeFileSync(target, content);
     });
 
-/*
-    for (const [ _filename, content ] of staticFiles) {
-        const filename = resolve("output/docs", config.prefix, _filename);
-        fs.mkdirSync(dirname(filename), { recursive: true });
-        fs.writeFileSync(filename, content);
-    }
-*/
-
 }
 
 (async function() {
     const path = resolve(process.argv[2]);
     const config = await Config.fromPath(path);
 
-    const api = new API(config.codeRoot);
-    await api.evaluate(config);
+    const api = new ApiDocument(config.codeRoot);
+//    await api.evaluate(config);
 
     const doc = Document.fromConfig(config);
-    await doc.evaluate();
+//    await doc.evaluate();
 
     generate(api, doc, config);
 })();
+*/

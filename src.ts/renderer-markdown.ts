@@ -1,3 +1,4 @@
+/*
 "use strict";
 
 import { relative } from "path";
@@ -160,3 +161,4 @@ export class MarkdownRenderer extends Renderer {
     }
 }
 
+*/

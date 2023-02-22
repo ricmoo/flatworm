@@ -2,6 +2,7 @@ import fs from "fs";
 import { dirname, join, resolve } from "path";
 
 import { HtmlRenderer } from "./renderer-html.js";
+import { SearchRenderer } from "./renderer-search.js";
 
 import { Config } from "./config.js";
 import { Document, Exported } from "./document.js";
@@ -12,6 +13,7 @@ import { Document, Exported } from "./document.js";
 
     const doc = Document.fromConfig(config);
     await doc.populateMtime();
+//    await doc.evaluate();
 
     //console.dir(doc, { depth: null });
     for (const section of doc) {
@@ -43,13 +45,17 @@ import { Document, Exported } from "./document.js";
         }
     }
 
-//    await doc.evaluate();
-
     const renderer = new HtmlRenderer(doc);
     for (let { filename, content } of renderer.render()) {
         if (filename.indexOf(".") === -1) { filename = join(filename, "index.html"); }
         filename = resolve("output/test/", filename);
         fs.mkdirSync(dirname(filename), { recursive: true });
+        fs.writeFileSync(filename, content);
+    }
+
+    const searchRenderer = new SearchRenderer(doc);
+    for (let { filename, content } of searchRenderer.render()) {
+        filename = resolve("output/test/", filename);
         fs.writeFileSync(filename, content);
     }
 

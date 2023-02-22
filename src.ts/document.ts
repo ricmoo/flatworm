@@ -21,7 +21,7 @@ import {
 import { Script } from "./script.js";
 import {
     ApiDocument, ApiSection, ApiSubsection,
-    Export, ObjectExport
+    Export, ObjectExport, ReturnsExport
 } from "./jsdocs.js";
 
 
@@ -37,7 +37,7 @@ const Directives: Readonly<{ [ tag: string ]: DirectiveInfo }> = Object.freeze({
     heading:     { title: "markdown", exts: [ "inherit", "note", "src" ] },
     code:        { title: "text",     exts: [ "lang" ] },  // body is specially handled
     "null":      { title: "none",     exts: [ ] },
-    "_export":   { title: "text",     exts: [ ] },
+    "export":    { title: "text",     exts: [ ] },
     //note:        { heading: "text, exts: [ ] },
     //warning:     { heading: "text", exts: [ ] },
     //table:       { heading: "text", exts: [ "style" ] }, // body is specially handled
@@ -46,12 +46,16 @@ const Directives: Readonly<{ [ tag: string ]: DirectiveInfo }> = Object.freeze({
 export abstract class Fragment {
     readonly titleNode: Node;
 
+    readonly directive: string;
+
     readonly value: string;
     readonly anchor: string;
 
     readonly #exts: Map<string, string>
 
     constructor(directive: string, value: string) {
+        this.directive = directive;
+
         this.value = value;
 
         this.#exts = new Map();
@@ -88,11 +92,15 @@ export abstract class Fragment {
     }
 }
 
+let nextId = 1;
+
 export abstract class SectionWithBody<T extends Subsection | Exported = Subsection | Exported> extends Fragment implements Iterable<T> {
     readonly body: Array<Content>;
 
     #parent: null | SectionWithBody;
     #children: Array<T>;
+
+    readonly sid: string;
 
     constructor(directive: string, value: string) {
         super(directive, value);
@@ -100,7 +108,11 @@ export abstract class SectionWithBody<T extends Subsection | Exported = Subsecti
         this.body = [ ];
         this.#parent = null;
         this.#children = [ ];
+
+        this.sid = `${ directive }_${ nextId++ }`;
     }
+
+    abstract get path(): string;
 
     get parent(): null | SectionWithBody { return this.#parent; }
 
@@ -156,7 +168,7 @@ export abstract class SectionWithBody<T extends Subsection | Exported = Subsecti
 
 export class Section extends SectionWithBody<Subsection | Exported> {
     readonly anchor: string;
-    readonly path: string;
+    #path: string;
 
     #mtime: number;
 
@@ -164,12 +176,14 @@ export class Section extends SectionWithBody<Subsection | Exported> {
 
     constructor(value: string, path: string) {
         super("section", value);
-        this.path = path;
+        this.#path = path;
 
         this.#mtime = 0;
 
         this.dependencies = [ ];
     }
+
+    get path(): string { return this.#path; }
 
     get mtime(): number { return this.#mtime; }
     _setMtime(mtime: number) { this.#mtime = mtime; }
@@ -310,8 +324,10 @@ export class Subsection extends SectionWithBody<Exported> {
     }
 
     get path(): string {
-        if (this.anchor == null) { throw new Error(`anchor required for path: ${ this.value }`); }
-        return `${ this.parentPath }/#${ this.anchor }`;
+        let path = "";
+        if (this.parentPath) { path += this.parentPath + "/"; }
+        path += `#${ this.anchor || this.sid }`;
+        return path;
     }
 }
 
@@ -320,8 +336,12 @@ export class Exported extends SectionWithBody<Exported> {
     readonly parentPath: string;
 
     constructor(exported: Export, parentPath: string) {
-        const value = `${ exported.name } @<${ exported.id }>`;
-        super("_export", value);
+        let title = exported.name;
+        if (exported instanceof ReturnsExport && exported.parent) {
+            title = `${ exported.prefix }.${ title }`;
+        }
+        const value = `${ title } @<${ exported.id }>`;
+        super("export", value);
         this.exported = exported;
         this.parentPath = parentPath;
 
@@ -419,11 +439,15 @@ export class ExportedContent extends Content implements Iterable<ExportedContent
 }
 */
 
+let nextSid = 1;
 
 export abstract class Content extends Fragment {
     readonly tag: string;
 
     constructor(tag: string, value: string) {
+        if (value.indexOf("@<") === -1) {
+            value += ` @<cid_${ nextSid++ }>`
+        }
         super(tag, value);
         this.tag = tag;
     }

@@ -1,3 +1,4 @@
+/*
 import { Document } from "./document";
 
 import { File, Renderer } from "./renderer";
@@ -23,3 +24,4 @@ export class MetadataRenderer extends Renderer {
         } ];
     }
 }
+*/

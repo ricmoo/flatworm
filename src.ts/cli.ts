@@ -1,3 +1,4 @@
+/*
 #!/usr/bin/env node
 
 "use strict";
@@ -136,3 +137,4 @@ function parseOpts(argv: Array<string>, validFlags: Array<string>, validOptions:
         console.log("");
     }
 })();
+*/
