@@ -13,7 +13,7 @@ import { Document, Exported } from "./document.js";
 
     const doc = Document.fromConfig(config);
     await doc.populateMtime();
-//    await doc.evaluate();
+    await doc.evaluate();
 
     //console.dir(doc, { depth: null });
     for (const section of doc) {
