@@ -617,10 +617,11 @@ class WrappedHtmlGenerator extends HtmlGenerator {
         this.append(`</head><body>`);
     }
 
-    appendSidebar(target: string, title: string, section?: Section): void {
+    appendSidebar(target?: string, title?: string, section?: Section): void {
         const config = this.renderer.document.config;
         this.append(`<div class="sidebar"><div class="header">`);
         this.append(`<a class="logo" href="${ this.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
+        this.append(`<div class="search"><form action="${ this.resolveLink("search") }" method="GET"><input name="search" id="search" /></form><span class="search-icon">&#9906;</span></div>`);
         this.append(`</div><div class="toc">`);
         this.append(`<div class="title"><a href="${ this.resolveLink("") }">DOCUMENTATION</a></div>`);
 
@@ -628,7 +629,13 @@ class WrappedHtmlGenerator extends HtmlGenerator {
             this.append(`<div data-depth="${ depth }" class="depth-${ depth }${ current ? " current": ""}${ selected ? " selected": "" }${ highlit ? " highlight": "" }${ dedent ? " dedent": "" }${ sub ? " sub": "" }"><a href="${ this.resolveLink(path) }">${ title }</a></div>`);
         }
 
-        this.append(`</div><div class="alt-link"><a href="${ target }">${ title }</a></div></div>`);
+        this.append(`</div>`);
+
+        if (target != null && title != null) {
+            this.append(`<div class="alt-link"><a href="${ target }">${ title }</a></div>`);
+        }
+
+        this.append(`</div>`);
     }
 
     beginContent(): void {
@@ -711,7 +718,7 @@ class InPageHtmlGenerator extends HtmlGenerator {
 
     resolveLink(link: string): string {
         // Static file
-        if (link.indexOf(".") >= 0) { return super.resolveLink(link); }
+        if (link.indexOf(".") >= 0 || link === "search") { return super.resolveLink(link); }
 
         return `${ super.resolveLink("single-page") }#${ normalizeAnchor(link) }`;
     }
@@ -724,7 +731,7 @@ class InPageWrappedHtmlGenerator extends WrappedHtmlGenerator {
 
     resolveLink(link: string): string {
         // Static file
-        if (link.indexOf(".") >= 0) { return super.resolveLink(link); }
+        if (link.indexOf(".") >= 0 || link === "search") { return super.resolveLink(link); }
         return `${ super.resolveLink("single-page") }#${ normalizeAnchor(link) }`;
     }
 }
@@ -878,6 +885,26 @@ export class HtmlRenderer extends Renderer implements Iterable<SectionWithBody> 
             const content = new WrappedHtmlGenerator(this);
             content.render(section);
             output.push(new OutputFile(rewrite(filename), content.output));
+        }
+
+        // Add search page
+        {
+            const search = new InPageWrappedHtmlGenerator(this);
+            search.clear();
+            search.appendHeader();
+            search.appendSidebar(null, null, this.document.sections[0]);
+            search.beginContent();
+            search.append(`<div class="breadcrumbs"><i>Search</i></div>`);
+            search.append(`<div class="title-section">Search</div>`);
+
+            search.append("");
+
+            search.append(`<div class="footer"><div class="copyright">The content of this site is licensed under the Creative Commons License. Generated on ${ getTimestamp((new Date()).getTime()) }.</div></div>`);
+
+            search.endContent();
+            search.append(`<script src="${ this.resolveLink("static/search.js") } " type="text/javascript"></script>`);
+            search.appendFooter();
+            output.push(new OutputFile(rewrite("search"), search.output));
         }
 
         // Render single-page HTML

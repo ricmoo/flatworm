@@ -30,6 +30,13 @@ export function fromB64(value: string): number {
 //    console.log(i, i.toString().length, toB64(i).length, toB64(i), fromB64(toB64(i)));
 //}
 
+function toTag(index0: number, index1: number): string {
+    if (index1 < 8) {
+        return toB64((index0 << 3) | index1);
+    }
+    return toB64(index0) + "/" + toB64(index1);
+}
+
 export type SummaryBlock = {
     link: string;
     text: string;
@@ -163,6 +170,10 @@ export class SearchRenderer extends Renderer {
 */
 
     render(): Array<OutputFile> {
+        const rewrite = (filename: string) => {
+            return this.resolveLink(filename).substring(1);
+        };
+
         // Summary of each paragraph
         const summaries: Array<Summary> = [ ];
         const indices: { [ keyword: string ]: Array<string> } = { };
@@ -196,8 +207,6 @@ export class SearchRenderer extends Renderer {
                     }
 
                     summary.blocks.push({ link: localLink, text });
-                    //console.log({ link: localLink, text });
-                    //console.log();
 
                     text.replace(/([a-z][a-z0-9]+)/ig, (all, word) => {
                         // After more than 100 words into a section, stop
@@ -206,34 +215,25 @@ export class SearchRenderer extends Renderer {
                         wordCount++;
                         if (wordCount > 100) { link = null; }
 
-                        const tag = `${ summaries.length - 1 }/${ summary.blocks.length - 1 }`
+                        //const tag = `${ summaries.length - 1 }/${ summary.blocks.length - 1 }`
+                        const tag = toTag(summaries.length - 1, summary.blocks.length - 1);
 
                         addWord(word, tag);
 
                         return "";
                     });
-
-                    /*
-                    summary.blocks.push({ link, text });
-
-                    sentence.replace(/([a-z][a-z0-9]+)/ig, (all, word) => {
-                        word = "_" + word.toLowerCase();
-
-                        // The tag to the summary block
-                        const tag = `${ summaries.length }/${ summary.blocks.length - 1 }`
-                        if (baseTag == null) { baseTag = tag; }
-
-                        // Link the word to the tag
-                        if (indices[word] == null) { indices[word] = [ ]; }
-                        if (indices[word].indexOf(tag) === -1) {
-                            indices[word].push(tag);
-                        }
-
-  return "";
-                    })
-                    */
                 }
             }
+        };
+
+        const getTitle = (sec: SectionWithBody) => {
+            const title = [ sec.title ];
+            let cur = sec;
+            while (cur.parent) {
+                cur = cur.parent;
+                title.unshift(cur.title)
+            }
+            return title.join(" -- ");
         };
 
         const addSection = (sec: SectionWithBody) => {
@@ -243,12 +243,39 @@ export class SearchRenderer extends Renderer {
                 link = null;
             }
 
-// @TODO: Add >>
-            summary = { title: sec.title, blocks: [ ] };
+            const blocks: Array<SummaryBlock> = [ ];
+            summary = { title: getTitle(sec), blocks };
             summaries.push(summary);
+            const baseTag = toTag(summaries.length - 1, 0);
+
+            // Add each title work
+            const titleWords: Array<string> = [ ];
+            sec.title.replace(/([a-z][a-z0-9]+)/ig, (all, word) => {
+
+                // Get each word of a camel case value
+                const camelCases = word.split(/(^[a-z]|[A-Z])/);
+                if (camelCases.length > 3 && word.toUpperCase() !== word) {
+                    for (let i = 1; i < camelCases.length; i += 2) {
+                        const word = (camelCases[i] + camelCases[i + 1]).toLowerCase();
+                        if (titleWords.indexOf(word) === -1) { titleWords.push(word); }
+                    }
+
+                    compound[word] = true;
+                }
+
+                word = word.toLowerCase();
+                if (titleWords.indexOf(word) === -1) { titleWords.push(word); }
+
+                return "";
+            });
 
             addBody(sec.body);
             sec.children.forEach(addSection);
+
+            // Link words in a title to the first summary block
+            if (blocks.length) {
+                titleWords.forEach((word) => { addWord(word, baseTag); });
+            }
         };
 
         for (const sec of this.document) {
@@ -261,12 +288,14 @@ export class SearchRenderer extends Renderer {
             version: "0.1",
             summaries: summaries,
             compound: Object.keys(compound).sort(),
-            indices: indices
+            indices: Object.keys(indices).reduce((accum, key) => {
+                accum[key] = indices[key].join(",")
+                return accum;
+            }, <Record<string, string>>{ })
         };
-        //console.dir(search, { depth: null });
 
         return [ {
-            filename: "search.json",
+            filename: rewrite("search.json"),
             content: JSON.stringify(search)
         } ];
     }
