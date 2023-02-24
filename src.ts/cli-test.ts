@@ -48,16 +48,15 @@ import { Document, Exported } from "./document.js";
     const renderer = new HtmlRenderer(doc);
     for (let { filename, content } of renderer.render()) {
         if (filename.indexOf(".") === -1) { filename = join(filename, "index.html"); }
-        filename = resolve("output/test/", filename);
+        filename = resolve("output/docs/", filename);
         fs.mkdirSync(dirname(filename), { recursive: true });
         fs.writeFileSync(filename, content);
     }
 
     const searchRenderer = new SearchRenderer(doc);
     for (let { filename, content } of searchRenderer.render()) {
-        filename = resolve("output/test/", filename);
+        filename = resolve("output/docs/", filename);
         fs.writeFileSync(filename, content);
     }
 
-//    generate(api, doc, config);
 })();
