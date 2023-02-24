@@ -1,12 +1,10 @@
-import type { Document, Fragment, Page } from "./document";
+import type { Document } from "./document.js";
 export declare abstract class Node {
     #private;
     readonly id: number;
     constructor();
-    _setDocument(document: Document, page: Page, fragment: Fragment): void;
+    _setDocument(document: Document): void;
     get document(): Document;
-    get page(): Page;
-    get fragment(): Fragment;
     abstract get textContent(): string;
 }
 export declare class TextNode extends Node {
@@ -51,7 +49,7 @@ export declare class ElementNode extends Node {
     readonly children: ReadonlyArray<Node>;
     readonly style: ElementStyle;
     constructor(style: ElementStyle, children: string | Array<string | Node>);
-    _setDocument(document: Document, page: Page, fragment: Fragment): void;
+    _setDocument(document: Document): void;
     get textContent(): string;
 }
 export declare class LinkNode extends ElementNode {

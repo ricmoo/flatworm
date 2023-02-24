@@ -1,16 +1,19 @@
-export declare type Line = {
-    classes: Array<string>;
-    content: string;
+import type { Config } from "./config.js";
+export declare type ScriptLineType = "code" | "comment" | "result" | "error" | "placeholder" | "hide" | "unknown";
+export declare type ScriptLine = {
+    line: string;
+    type: ScriptLineType;
+    lineNo: number;
 };
+export declare type ScriptReader = (line: ScriptLine) => void;
 export declare class Script {
-    readonly codeRoot: string;
-    readonly contextify: (context: any) => void;
-    readonly _require: (name: string) => any;
-    private _pageContext;
-    constructor(codeRoot: string, contextify?: (context: any) => void);
-    resetPageContext(): void;
-    run(filename: string, code: string): Promise<Array<Line>>;
-    _runMethod(name: string): Promise<void>;
-    startup(): Promise<void>;
-    shutdown(): Promise<void>;
+    #private;
+    readonly language: string;
+    readonly filename: string;
+    readonly lineOffset: number;
+    constructor(source: string, language: string, filename?: string, lineOffset?: number);
+    get source(): string;
+    isEvaluated(): boolean;
+    evaluate(config: Config): Promise<void>;
+    forEach(func: ScriptReader): void;
 }

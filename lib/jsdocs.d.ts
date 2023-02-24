@@ -1,5 +1,5 @@
-import { Script } from "./script2.js";
-import type { Config } from "./config2.js";
+import { Script } from "./script.js";
+import type { Config } from "./config.js";
 declare type Node = any;
 export declare type VisitFunc = (type: string, node: Node, ancestors: Array<Node>, depth: number) => void;
 export declare function indent(size: number): string;
@@ -47,12 +47,15 @@ export declare class TypeFunction extends Type {
     readonly returns: Type;
     constructor(params: Array<Param>, returns: Type);
 }
-export declare class Export {
+export declare type ExportType = "abstract class" | "class" | "const" | "constructor" | "create" | "function" | "interface" | "method" | "property" | "static method" | "type";
+export declare abstract class Export {
     #private;
     readonly filename: string;
     readonly lineno: number;
     readonly name: string;
     constructor(filename: string, lineno: number, name: string, docs: string);
+    abstract get type(): ExportType;
+    get title(): string;
     get dependencies(): Array<string>;
     get id(): string;
     get docs(): string;
@@ -70,7 +73,6 @@ export declare abstract class ReturnsExport extends Export {
     constructor(filename: string, lineno: number, name: string, docs: string, returns: Type);
     _setParent(parent: ObjectExport): void;
     get id(): string;
-    abstract get type(): string;
     get prefix(): string;
     get returns(): Type;
     dump(_indent?: number): void;
@@ -81,56 +83,66 @@ export declare class FunctionExport extends ReturnsExport {
     readonly isAbstract: boolean;
     constructor(filename: string, lineno: number, name: string, docs: string, returns: Type, params: Array<Param>, isStatic: boolean, isAbstract: boolean);
     get id(): string;
-    get type(): string;
+    get type(): ExportType;
     get prefix(): string;
     dump(_indent?: number): void;
 }
 export declare class PropertyExport extends ReturnsExport {
     _access: string;
     constructor(filename: string, lineno: number, name: string, docs: string, returns: Type, access: "readonly" | "+write" | "+read");
-    get type(): string;
+    get type(): ExportType;
     get isReadonly(): boolean;
     dump(_indent?: number): void;
     _updateAccess(access: "+read" | "+write" | "readonly"): void;
 }
-export declare class ObjectExport extends Export {
+export declare abstract class ObjectExport extends Export implements Iterable<Export> {
     readonly methods: Map<string, FunctionExport>;
     readonly properties: Map<string, PropertyExport>;
-    readonly supers: Array<string>;
-    readonly type: string;
-    constructor(type: string, filename: string, lineno: number, name: string, docs: string, supers: Array<string>);
+    readonly supers: Array<ObjectExport>;
+    constructor(filename: string, lineno: number, name: string, docs: string);
+    get children(): Array<Export>;
+    get length(): number;
+    [Symbol.iterator](): Iterator<Export>;
     evaluate(config: Config): Promise<void>;
+    get allSupers(): Array<ObjectExport>;
     dump(_indent?: number): void;
     _addMethod(value: FunctionExport): void;
     _addProperty(value: PropertyExport, access: "+read" | "+write" | "readonly"): void;
+    _addSuper(value: ObjectExport): boolean;
 }
 export declare class ClassExport extends ObjectExport {
     #private;
     readonly staticMethods: Map<string, FunctionExport>;
     readonly isAbstract: boolean;
     get ctor(): null | FunctionExport;
-    constructor(filename: string, lineno: number, name: string, docs: string, supers: Array<string>, isAbstract: boolean);
+    constructor(filename: string, lineno: number, name: string, docs: string, isAbstract: boolean);
+    get type(): ExportType;
+    get children(): Array<Export>;
     evaluate(config: Config): Promise<void>;
     _setConstructor(value: FunctionExport): void;
     _addStaticMethod(value: FunctionExport): void;
     dump(_indent?: number): void;
 }
 export declare class InterfaceExport extends ObjectExport {
+    constructor(filename: string, lineno: number, name: string, docs: string);
+    get type(): ExportType;
 }
 export declare class TypeExport extends ReturnsExport {
-    get type(): string;
+    get type(): ExportType;
 }
 export declare class ConstExport extends ReturnsExport {
-    get type(): string;
+    get type(): ExportType;
 }
-export declare class _ApiSection<T> {
+export declare class _ApiSection<T extends ApiSubsection | Export> {
     #private;
-    objs: Array<T>;
     constructor(title?: string, flatworm?: string, anchor?: string);
+    get objs(): Array<T>;
+    get examples(): Array<string>;
     get anchor(): string;
     get flatworm(): string;
     get title(): string;
     _addObject(item: T): void;
+    _addExample(ex: string): void;
     _setFlatworm(flatworm: string): void;
     _setTitle(title: string): void;
     _setAnchor(anchor: string): void;
@@ -142,6 +154,7 @@ export declare class ApiSection extends _ApiSection<ApiSubsection | Export> {
     #private;
     readonly dependencies: Array<string>;
     constructor(title?: string, flatworm?: string, anchor?: string);
+    get subsections(): Array<Export | ApiSubsection>;
     get navTitle(): string;
     _setNavTitle(nav: string): void;
     get path(): string;
@@ -149,15 +162,16 @@ export declare class ApiSection extends _ApiSection<ApiSubsection | Export> {
     _addSubsection(subsection: ApiSubsection | Export): void;
     _addDependency(dep: string): void;
 }
-export declare class API {
+export declare class ApiDocument {
     readonly basePath: string;
     readonly objs: Array<Export>;
     readonly toc: Map<string, ApiSection>;
+    get sections(): Array<ApiSection>;
     getExport(name: string): Export;
-    getSupers(name: string): Array<ObjectExport>;
     constructor(basePath: string);
     resolve(...args: Array<string>): string;
     evaluate(config: Config): Promise<void>;
     dump(): void;
 }
+export declare function extractExports(basePath: string): Array<Export>;
 export {};

@@ -1,103 +1,106 @@
-import type { Config } from "./config";
-import type { Line, Script } from "./script";
-import { CellNode, MarkdownStyle, Node } from "./markdown";
-export declare type TocEntry = {
-    depth: number;
-    title: string;
-    path: string;
-};
-export declare enum FragmentType {
-    SECTION = "section",
-    SUBSECTION = "subsection",
-    HEADING = "heading",
-    DEFINITION = "definition",
-    PROPERTY = "property",
-    NOTE = "note",
-    WARNING = "warning",
-    CODE = "code",
-    NULL = "null",
-    TOC = "toc",
-    TABLE = "table"
-}
-export declare class Fragment {
+/**
+ *  Normal Pages
+ *  - Section
+ *    - Subsection
+ *      - CodeContent | BodyContent
+ *
+ *  API Pages
+ *  - Section
+ *    - Subsection | Exported
+ *      - Exported
+ */
+import { Config } from "./config.js";
+import { Node } from "./markdown.js";
+import { Script } from "./script.js";
+import { ApiSection, Export } from "./jsdocs.js";
+export declare abstract class Fragment {
     #private;
-    readonly tag: FragmentType;
+    readonly titleNode: Node;
+    readonly directive: string;
     readonly value: string;
-    readonly link: string;
-    readonly title: Node;
-    readonly body: ReadonlyArray<Node>;
-    readonly extensions: Readonly<{
-        [extension: string]: string;
-    }>;
-    constructor(tag: FragmentType, value: string, body: Array<Node>);
-    get page(): Page;
-    get autoLink(): string;
-    get parent(): Fragment;
-    _setDocument(document: Document): void;
-    _setPage(page: Page, parents: Array<Fragment>): void;
-    getExtension(name: string): string;
-    static from(tag: FragmentType, value: string, body: string): Fragment;
+    readonly anchor: string;
+    constructor(directive: string, value: string);
+    get title(): string;
+    getExtension(key: string): null | string;
 }
-export declare class CodeFragment extends Fragment {
+export declare abstract class SectionWithBody<T extends Subsection | Exported = Subsection | Exported> extends Fragment implements Iterable<T> {
     #private;
-    readonly heading: string;
-    readonly source: string;
-    constructor(heading: string, source: string);
-    get language(): string;
-    get code(): ReadonlyArray<Line>;
-    evaluate(script: Script): Promise<void>;
-    get evaluated(): boolean;
+    readonly body: Array<Content>;
+    readonly sid: string;
+    constructor(directive: string, value: string);
+    abstract get path(): string;
+    get parent(): null | SectionWithBody;
+    get depth(): number;
+    get children(): ReadonlyArray<T>;
+    _addChild(child: T): void;
+    _setParent(parent: SectionWithBody): void;
+    get recursive(): boolean;
+    get length(): number;
+    [Symbol.iterator](): Iterator<T>;
+    evaluate(config: Config): Promise<void>;
+    get text(): string;
 }
-export declare class TocFragment extends Fragment {
-    readonly items: ReadonlyArray<string>;
-    constructor(body: string);
-}
-export declare enum TableStyle {
-    MINIMAL = "minimal",
-    COMPACT = "compact",
-    WIDE = "wide",
-    FULL = "full"
-}
-export declare class TableFragment extends Fragment {
+export declare class Section extends SectionWithBody<Subsection | Exported> {
     #private;
-    readonly rows: number;
-    readonly cols: number;
-    constructor(value: string, body: string);
-    get style(): TableStyle;
-    getCell(row: number, col: number): CellNode;
-    getParentCell(row: number, col: number): CellNode;
-    _setDocument(document: Document): void;
-}
-export declare class Page {
-    #private;
-    readonly fragments: ReadonlyArray<Fragment>;
-    readonly filename: string;
-    readonly title: string;
-    readonly sectionFragment: Fragment;
-    readonly modifiedDate: Date;
-    static searchPage(basepath: string): Page;
-    constructor(filename: string, fragments: Array<Fragment>, options?: {
-        modifiedDate?: Date;
-    });
-    get toc(): ReadonlyArray<Readonly<TocEntry>>;
-    get document(): Document;
+    readonly anchor: string;
+    dependencies: Array<string>;
+    constructor(value: string, path: string);
     get path(): string;
-    _setDocument(document: Document): void;
-    static fromFile(filename: string): Page;
+    get mtime(): number;
+    _setMtime(mtime: number): void;
+    get priority(): number;
+    get depth(): number;
+    get navTitle(): string;
+    static fromContent(content: string, path: string): Section;
+    static fromApi(api: ApiSection, path: string): Section;
 }
-export declare class Document {
-    #private;
-    readonly basepath: string;
-    readonly pages: ReadonlyArray<Page>;
+export declare class Subsection extends SectionWithBody<Exported> {
+    readonly parentPath: string;
+    constructor(value: string, parentPath: string);
+    get path(): string;
+}
+export declare class Exported extends SectionWithBody<Exported> {
+    readonly exported: Export;
+    readonly parentPath: string;
+    constructor(exported: Export, parentPath: string);
+    get examples(): Array<Script>;
+    get path(): string;
+    get recursive(): boolean;
+    evaluate(config: Config): Promise<void>;
+}
+export declare abstract class Content extends Fragment {
+    readonly tag: string;
+    constructor(tag: string, value: string);
+    abstract get text(): string;
+    abstract evaluate(config: Config): Promise<void>;
+    static nullContent(body: string): Content;
+    static fromContent(tag: string, value: string, body: string): Content;
+    static fromFlatworm(flatworm: string): Array<Content>;
+}
+export declare class BodyContent extends Content {
+    readonly body: Array<Node>;
+    constructor(tag: string, value: string, body: Array<Node>);
+    evaluate(config: Config): Promise<void>;
+    get text(): string;
+}
+export declare class CodeContent extends Content {
+    source: string;
+    script: Script;
+    constructor(value: string, source: string);
+    get text(): string;
+    get language(): string;
+    evaluate(config: Config): Promise<void>;
+}
+export declare class Document implements Iterable<Section> {
     readonly config: Config;
-    constructor(basepath: string, pages: Array<Page>, config: Config);
-    get names(): Array<string>;
-    getLinkName(name: string): string;
-    getLinkUrl(name: string): string;
-    getPage(path: string): Page;
-    get copyright(): Array<Node>;
-    get toc(): ReadonlyArray<Readonly<TocEntry>>;
-    parseMarkdown(markdown: string, styles?: Array<MarkdownStyle>): Array<Node>;
-    evaluate(script: Script): Promise<void>;
-    static fromFolder(path: string, config: Config): Document;
+    readonly sections: Array<Section>;
+    constructor(config: Config);
+    get length(): number;
+    [Symbol.iterator](): Iterator<Section>;
+    evaluate(): Promise<void>;
+    static fromPath(path: string): Promise<Document>;
+    static fromConfig(config: Config): Document;
+    populateMtime(): Promise<void>;
+    getLinkName(anchor: string): string;
+    getLinkUrl(anchor: string): string;
 }
