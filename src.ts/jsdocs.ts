@@ -810,7 +810,6 @@ export type ExportType = "abstract class" | "class" | "const" |
 const sortPropOrder: Record<ExportType, number> = {
     "const": 1,
 
-    "interface": 2,
     "type": 2,
 
     "function": 3,
@@ -824,8 +823,9 @@ const sortPropOrder: Record<ExportType, number> = {
 
     "static method": 8,
 
+    "interface": 9,
     "abstract class": 9,
-    "class": 10
+    "class": 9
 };
 
 function sortProps(a: ApiSubsection | Export, b: ApiSubsection | Export) {
