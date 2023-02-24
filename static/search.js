@@ -19,6 +19,24 @@
     return words;
   }
 
+  const b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+  function fromB64(value) {
+    let result = 0;
+    for (let i = 0; i < value.length; i++) {
+        result *= 64;
+        result += b64.indexOf(value[i]);
+    }
+    return result;
+  }
+
+  function splitTag(tag) {
+    const comps = tag.split("/");
+    if (comps.length === 2) { return comps.map(fromB64); }
+    const value = fromB64(tag);
+    return [ value >> 3, value & 7 ];
+  }
+
   function search(words) {
     const blocks = [ ];
     const tally = { };
@@ -32,9 +50,10 @@
       word = "_" + word.toLowerCase();
       const found = data.indices[word];
       if (found) {
-        found.forEach((block) => {
+        found.split(",").forEach((block) => {
           blocks.push(block);
-          const comps = block.split("/");
+          //const comps = block.split("/");
+          const comps = splitTag(block).map(String);
           if (tally[block] == null) { tally[block] = 0; }
           if (tally[comps[0]] == null) { tally[comps[0]] = 0; }
 
@@ -62,7 +81,8 @@
 
     // Score each block
     const scores = blocks.reduce((accum, block) => {
-      const comps = block.split("/");
+      //const comps = block.split("/");
+      const comps = splitTag(block).map(String);
       accum[block] = 11 * tally[block] + 3 * tally[comps[0]];
       return accum;
     }, { });
@@ -75,7 +95,8 @@
     let lastComps = [ -1, -1 ];
     const output = [ ];
     result.forEach((block) => {
-      const comps = block.split("/").map((v) => parseInt(v));
+      //const comps = block.split("/").map((v) => parseInt(v));
+      const comps = splitTag(block);
       const summary = data.summaries[comps[0]];
       const details = summary.blocks[comps[1]];
 
@@ -99,7 +120,7 @@
     };
   }
 
-  const response = await fetch("/v5/search.json");
+  const response = await fetch("../search.json");
   const data = await response.json();
 
   const content = document.querySelector("div.content");
@@ -119,7 +140,7 @@
       for (let i = 0; i < text.length; i++) {
           current += text[i];
           for (let j = 0; j < searchWords.length; j++) {
-            const word = searchWords[j];
+            const word = searchWords[j].toLowerCase();
             const offset = current.length - word.length;
             const tailValue = current.substring(offset);
             if (tailValue.toLowerCase() === word) {
@@ -160,13 +181,14 @@
   }
 
   const words = decodeURIComponent((location.search.split("search=")[1] || "").replace(/\+/g, " "));
+
   document.getElementById("search").value = words;
   const { results, searchWords } = search(expandCompoundWords(words));
   if (results.length === 0) {
      appendBlock("No Results.")
   } else {
      results.forEach((result) => {
-      appendBlock(result.title, result.text, result.link, searchWords);
+       appendBlock(result.title, result.text, result.link, searchWords);
     });
   }
 })();

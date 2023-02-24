@@ -142,6 +142,40 @@ body {
   font-weight: bold;
 }
 
+.sidebar .search input {
+    border: 0;
+    border-radius: 15px;
+    color: #008;
+    font-size: 25px;
+    line-height: 30px;
+    margin: 0;
+    opacity: 0.4;
+    outline: none;
+    padding-left: 30px;
+    padding-right: 10px;
+    transition: opacity 0.3s linear;
+    width: 80%;
+}
+
+.sidebar .search input:focus {
+    opacity: 1;
+}
+
+.sidebar .search:hover input {
+    opacity: 1;
+    transition: opacity 0.3s linear 0.3s;
+}
+
+.sidebar .search-icon {
+    color: #004;
+    font-weight: bold;
+    font-size: 27px;
+    position: absolute;
+    left: 26px;
+    top: 6px;
+    transform: rotate(-45deg);
+}
+
 .sidebar .alt-link {
   background: #2535a0;
   bottom: 0;
@@ -306,6 +340,10 @@ body {
   padding: 40px 0 50px;
   margin-left: 310px;
   width: 760px;
+}
+
+span.highlight {
+    background: #fe0;  
 }
 
 .footer {
