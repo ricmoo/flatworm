@@ -621,7 +621,7 @@ class WrappedHtmlGenerator extends HtmlGenerator {
         const config = this.renderer.document.config;
         this.append(`<div class="sidebar"><div class="header">`);
         this.append(`<a class="logo" href="${ this.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
-        this.append(`<div class="search"><form action="${ this.resolveLink("search") }" method="GET"><input name="search" id="search" /></form><span class="search-icon">&#9906;</span></div>`);
+        this.append(`<div class="search"><form action="${ this.resolveLink("search") }" method="GET"><input name="search" id="search" /></form></div>`);
         this.append(`</div><div class="toc">`);
         this.append(`<div class="title"><a href="${ this.resolveLink("") }">DOCUMENTATION</a></div>`);
 
