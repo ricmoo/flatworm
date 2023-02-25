@@ -620,7 +620,7 @@ class WrappedHtmlGenerator extends HtmlGenerator {
     appendSidebar(target?: string, title?: string, section?: Section): void {
         const config = this.renderer.document.config;
         this.append(`<div class="sidebar"><div class="header">`);
-        this.append(`<a class="logo" href="${ this.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a>`);
+        this.append(`<a class="logo" href="${ this.resolveLink("") }"><div class="image"></div><div class="name">${ config.title }</div><div class="version">${ config.subtitle }</div></a><div class="show-toc"><div class="icon-menu"></div><div class="icon-close"></div></div>`);
         this.append(`<div class="search"><form action="${ this.resolveLink("search") }" method="GET"><input name="search" id="search" /></form></div>`);
         this.append(`</div><div class="toc">`);
         this.append(`<div class="title"><a href="${ this.resolveLink("") }">DOCUMENTATION</a></div>`);
@@ -686,7 +686,7 @@ class WrappedHtmlGenerator extends HtmlGenerator {
     }
 
     appendFooter(): void {
-        this.append(`<script type="module" src="${ this.resolveLink("static/script-v2.js") }"></script></body></html>`);
+        this.append(`<script type="module" src="${ this.resolveLink("static/script.js") }"></script></body></html>`);
     }
 
     render(section: Section): string {
@@ -849,6 +849,9 @@ export class HtmlRenderer extends Renderer implements Iterable<SectionWithBody> 
 
         [
             "link.svg",
+            "menu.svg",
+            "close.svg",
+
             "lato/index.html",
             "lato/Lato-Italic.ttf",
             "lato/Lato-Black.ttf",
@@ -863,7 +866,7 @@ export class HtmlRenderer extends Renderer implements Iterable<SectionWithBody> 
             "liberation/LiberationMono-BoldItalic.ttf",
 
             "search.js",
-    //        "script-v2.js",
+            "script.js",
             "style.css",
         ].forEach((_filename) => {
             const filename = resolve(__dirname, "../static", _filename);

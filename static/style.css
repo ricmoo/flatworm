@@ -80,6 +80,10 @@ body {
   clear: both;
 }
 
+div {
+  box-sizing: border-box;
+}
+
 .hidden {
   display: none;
   ddd-opacity: 0.2;
@@ -142,6 +146,10 @@ body {
   font-weight: bold;
 }
 
+.sidebar .header .show-toc {
+  display: none;
+}
+
 .sidebar .search input {
     border: 0;
     border-radius: 15px;
@@ -199,7 +207,6 @@ body {
 
 .sidebar .toc {
   font-size: 14px;
-  dddpadding-left: 20px;
 }
 
 .sidebar .toc div.title {
@@ -675,35 +682,36 @@ a.link {
 }
 
 a.link.anchor {
-  background: url(./link.svg) left no-repeat;
+  background: url(./link.svg) center no-repeat;
   display: inline-block;
   opacity: 0.0;
-  transform: translate(-100%, 15%);
+  dddheight: 100%;
+  transform: translate(-100%, 0) scale(0.75);
 }
 
 .title-section a.link.anchor {
-  height: 27px;
+  dddheight: 27px;
   width: 35px;
 }
 
 .title-subsection a.link.anchor {
-  height: 24px;
+  dddheight: 24px;
   width: 35px;
 }
 
 .title-export a.link.anchor {
-  height: 24px;
+  dddheight: 24px;
   width: 35px;
 }
 
 .header a.link.anchor {
-  height: 16px;
-  width: 24px;
+  dddheight: 16px;
+  width: 30px;
 }
 
 .signature a.link.anchor {
-  height: 16px;
-  width: 24px;
+  dddheight: 16px;
+  width: 30px;
 }
 
 .show-links:hover a.link.source {
@@ -760,4 +768,155 @@ a.link.source {
 .style-link.external:hover a::after {
   color: #008;
   ddd-content: "\25F9\a0";
+}
+
+@media only screen and (max-width: 1000px) {
+  html {
+    font-size: 24px;
+  }
+
+  .sidebar {
+    box-shadow: 0px 5px 15px 0px #115;
+    ddd-box-shadow: none;
+    display: block;
+    bottom: none;
+    height: 105px;
+    left: 0;
+    padding-top: 105px;
+    padding-bottom: 0px;
+    position: fixed;
+    top: 0;
+    transition: height 0.2s linear;
+    right: 0;
+    width: 100%;
+    z-index: 100;
+  }
+
+  body.show-toc .sidebar {
+    padding-bottom: 30px;
+  }
+
+  body.show-toc .sidebar {
+    position: fixed;
+    height: 100%;
+  }
+
+  .sidebar .header {
+    ddd-box-shadow: none;
+    height: 105px;
+    position: fixed;
+    width: 100%;
+  }
+
+  .sidebar .header a.logo {
+    margin-top: 22px;
+    margin-bottom: 10px;
+    padding: 0;
+    position: absolute;
+    left: 20px;
+    width: 140px;
+  }
+
+  .sidebar .header .logo .image {
+    background: url(./logo.svg) left no-repeat;
+    height: 60px;
+    width: 140px;
+  }
+
+  .sidebar .logo .name {
+    display: none;
+  }
+
+  .sidebar .logo .version {
+    display: none;
+  }
+
+  .sidebar .header .show-toc {
+    display: block;
+    position: absolute;
+    top: 15px;
+    right: 10px;
+    width: 10px;
+    height: 10px;
+  }
+
+  .sidebar .header .show-toc .icon-close {
+    background: url(./close.svg) center no-repeat;
+    height: 100px;
+    opacity: 0.0;
+    position: absolute;
+    pointer-events: none;
+    right: 45px;
+    top: -7px;
+    transition: opacity 0.2s linear;
+    width: 50px;
+  }
+
+  body.show-toc .sidebar .header .show-toc .icon-close {
+    opacity: 0.5;
+    pointer-events: auto;
+  }
+
+  .sidebar .header .show-toc .icon-menu {
+    background: url(./menu.svg) center no-repeat;
+    height: 100px;
+    opacity: 0.5;
+    position: absolute;
+    right: 30px;
+    top: -7px;
+    transition: opacity 0.2s linear;
+    width: 80px;
+  }
+
+  body.show-toc .sidebar .header .show-toc .icon-menu {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+
+  .sidebar .search {
+    display: none;
+  }
+
+  .sidebar .toc {
+    font-size: 36px;
+  }
+
+  .sidebar .alt-link {
+    display: none;
+  }
+
+  .content {
+    padding: 140px 80px 50px 80px;
+    margin-left: 0px;
+    width: 100%;
+  }
+
+  body.show-toc .content {
+    overflow: hidden;
+    pointer-events: none;
+    position: fixed;
+  }
+
+  a.link.anchor {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  a.link.source {
+    font-size: 16px;
+    transform: translate(0, -10px);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .tapped a.link.anchor {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+
+  .tapped a.link.source {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
 }
