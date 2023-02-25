@@ -14,7 +14,7 @@ import {
     ElementNode, LinkNode, ListNode, Node, TextNode
 } from "./markdown.js";
 import {
-    FunctionExport, ReturnsExport, ObjectExport,
+    FunctionExport, ReturnsExport, ObjectExport, PropertyExport,
 
     ExportType,
 
@@ -512,6 +512,14 @@ class HtmlGenerator extends Generator {
         if (!isCtor && ex instanceof ReturnsExport) {
             this.append(`<span class="symbol arrow">&rArr; </span>`);
             this.append(`<span class="returns">${ this.renderType(ex.returns) }</span>`);
+
+            if (ex instanceof PropertyExport && ex.isReadonly) {
+                this.append(`<span class="category readonly">read-only</span>`);
+            }
+
+            if (ex instanceof FunctionExport && ex.isAbstract) {
+                this.append(`<span class="category abstract">abstract</span>`);
+            }
         }
 
         this.append(`</div>`); // signature
