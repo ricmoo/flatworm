@@ -105,6 +105,7 @@ export abstract class Renderer {
     }
 
     resolveLink(href: string): string {
+        if (href.indexOf(":") >= 0) { return href; }
         let link = `${ this.document.config.prefix }/${ href }`;
         if (link.indexOf("#") === -1 && link.indexOf(".") === -1 && !link.endsWith("/")) {
             link += "/";
