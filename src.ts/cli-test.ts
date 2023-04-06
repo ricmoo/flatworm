@@ -5,7 +5,7 @@ import { HtmlRenderer } from "./renderer-html.js";
 import { SearchRenderer } from "./renderer-search.js";
 
 import { Config } from "./config.js";
-import { Document, Exported } from "./document.js";
+import { Document } from "./document.js";
 
 (async function() {
     const path = resolve(process.argv[2]);
@@ -15,6 +15,7 @@ import { Document, Exported } from "./document.js";
     await doc.populateMtime();
     await doc.evaluate();
 
+    /*
     //console.dir(doc, { depth: null });
     for (const section of doc) {
         const title = section.title;
@@ -44,6 +45,7 @@ import { Document, Exported } from "./document.js";
             }
         }
     }
+    */
 
     const renderer = new HtmlRenderer(doc);
     for (let { filename, content } of renderer.render()) {
