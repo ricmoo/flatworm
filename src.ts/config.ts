@@ -120,10 +120,13 @@ export class Config {
            throw new Error("no config found in folder");
         }
 
-        if (extname(path) === ".json") {
-            return Config.fromJson(path, fs.readFileSync(path).toString());
-        } else if (extname(path) === ".js") {
-            return await Config.fromScript(path);
+        const ext = extname(path);
+
+        switch(ext) {
+            case ".json":
+                return Config.fromJson(path, fs.readFileSync(path).toString());
+            case ".js": case ".mjs": case ".cjs":
+                return await Config.fromScript(path);
         }
 
         throw new Error("invalid config");
