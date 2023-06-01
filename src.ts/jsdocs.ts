@@ -1095,7 +1095,19 @@ export abstract class ObjectExport extends Export implements Iterable<Export> {
         let children: Array<Export> = Array.from(this.properties.values());
         children = children.concat(Array.from(this.methods.values()));
         children.sort(sortProps);
-        return children;
+
+        const supers = this.allSupers;
+        return children.filter((child) => {
+            if (child instanceof FunctionExport && child.flatworm.trim() === "") {
+                for (const s of supers) {
+                    if (s.methods.has(child.name)) {
+                        //console.log(`Skipping empty ${ this.name }.${ child.name } found in ${ s.name }`);
+                        return false;
+                    }
+                }
+            }
+            return true;
+        });
     }
 
     get length(): number {
