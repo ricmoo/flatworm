@@ -203,7 +203,7 @@ export class SearchRenderer extends Renderer {
 
                     let localLink = link;
                     if (!localLink) {
-                        localLink = `${ section.path }/${ p.anchor }`;
+                        localLink = `${ this.resolveLink(section.path) }#${ p.anchor }`;
                     }
 
                     summary.blocks.push({ link: localLink, text });
