@@ -1,7 +1,7 @@
 import { Script } from "./script.js";
 import type { Config } from "./config.js";
-declare type Node = any;
-export declare type VisitFunc = (type: string, node: Node, ancestors: Array<Node>, depth: number) => void;
+type Node = any;
+export type VisitFunc = (type: string, node: Node, ancestors: Array<Node>, depth: number) => void;
 export declare function indent(size: number): string;
 export declare function getExports(path: string): Record<string, Set<string>>;
 export declare function getObjects(path: string, exports: Set<string>): Array<any>;
@@ -47,7 +47,7 @@ export declare class TypeFunction extends Type {
     readonly returns: Type;
     constructor(params: Array<Param>, returns: Type);
 }
-export declare type ExportType = "abstract class" | "class" | "const" | "constructor" | "create" | "function" | "interface" | "method" | "property" | "static method" | "type";
+export type ExportType = "abstract class" | "class" | "const" | "constructor" | "create" | "function" | "interface" | "method" | "property" | "static method" | "type";
 export declare abstract class Export {
     #private;
     readonly filename: string;

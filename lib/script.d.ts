@@ -1,11 +1,11 @@
 import type { Config } from "./config.js";
-export declare type ScriptLineType = "code" | "comment" | "result" | "error" | "placeholder" | "hide" | "unknown";
-export declare type ScriptLine = {
+export type ScriptLineType = "code" | "comment" | "result" | "error" | "placeholder" | "hide" | "unknown";
+export type ScriptLine = {
     line: string;
     type: ScriptLineType;
     lineNo: number;
 };
-export declare type ScriptReader = (line: ScriptLine) => void;
+export type ScriptReader = (line: ScriptLine) => void;
 export declare class Script {
     #private;
     readonly language: string;

@@ -74,7 +74,7 @@ export declare abstract class Content extends Fragment {
     abstract get text(): string;
     abstract evaluate(config: Config): Promise<void>;
     static nullContent(body: string): Content;
-    static fromContent(tag: string, value: string, body: string): Content;
+    static fromContent(tag: string, value: string, body: string, filename?: string): Content;
     static fromFlatworm(flatworm: string): Array<Content>;
 }
 export declare class BodyContent extends Content {
@@ -85,8 +85,9 @@ export declare class BodyContent extends Content {
 }
 export declare class CodeContent extends Content {
     source: string;
+    filename: string;
     script: Script;
-    constructor(value: string, source: string);
+    constructor(value: string, source: string, path?: string);
     get text(): string;
     get language(): string;
     evaluate(config: Config): Promise<void>;

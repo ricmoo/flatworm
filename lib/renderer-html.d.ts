@@ -1,7 +1,7 @@
 import { SectionWithBody } from "./document.js";
 import { OutputFile, Renderer } from "./renderer.js";
 import type { Document } from "./document.js";
-export declare type Link = {
+export type Link = {
     title: string;
     link: string;
     style: string;
