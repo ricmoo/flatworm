@@ -1,6 +1,8 @@
 import fs from "fs";
 import { dirname, join, resolve } from "path";
 
+import JSZip from "jszip";
+
 import { HtmlRenderer } from "./renderer-html.js";
 import { SearchRenderer } from "./renderer-search.js";
 
@@ -47,9 +49,12 @@ import { Document } from "./document.js";
     }
     */
 
+    const zip = new JSZip();
+
     const renderer = new HtmlRenderer(doc);
     for (let { filename, content } of renderer.render()) {
         if (filename.indexOf(".") === -1) { filename = join(filename, "index.html"); }
+        zip.file(join("docs", filename), content);
         filename = resolve("output/docs/", filename);
         fs.mkdirSync(dirname(filename), { recursive: true });
         fs.writeFileSync(filename, content);
@@ -57,8 +62,15 @@ import { Document } from "./document.js";
 
     const searchRenderer = new SearchRenderer(doc);
     for (let { filename, content } of searchRenderer.render()) {
+        zip.file(join("docs", filename), content);
         filename = resolve("output/docs/", filename);
         fs.writeFileSync(filename, content);
     }
+
+    fs.writeFileSync(`output/docs${ config.prefix }/all-docs.zip`, await zip.generateAsync({
+        compression: "DEFLATE",
+        compressionOptions: { level: 9 },
+        type: "uint8array"
+    }));
 
 })();
