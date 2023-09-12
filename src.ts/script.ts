@@ -166,6 +166,7 @@ export class Script {
     isEvaluated(): boolean { return this.#result != null; }
 
     async evaluate(config: Config): Promise<void> {
+
         if (this.isEvaluated()) { return; }
         const result: Array<{ type: ScriptLineType, line: string }> = [ ];
 
@@ -174,7 +175,7 @@ export class Script {
                 result.push({ line, type });
             }
 
-        } else if (this.language === "script") {
+        } else if (this.language === "script" || this.language === "solidity") {
             for (const line of this.#lines) {
                 if (line.trim().match(/^\/\/_(hide|result|error):/)) { continue; }
                 const type = line.trim().startsWith("/\/") ? "comment": "code";

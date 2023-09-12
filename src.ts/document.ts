@@ -231,7 +231,7 @@ export class Section extends SectionWithBody<Subsection | Exported> {
                 section._addChild(subsection);
 
             } else {
-                const cont = Content.fromContent(tag, value, content);
+                const cont = Content.fromContent(tag, value, content, path);
                 if (subsection) {
                     subsection.body.push(cont);
                 } else if (section) {
@@ -281,7 +281,7 @@ export class Section extends SectionWithBody<Subsection | Exported> {
 
         for (const ex of api.examples) {
             const lines = ex.split("\n");
-            section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n")));
+            section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n"), (section.path + "/example.js")));
         }
 
         for (const apiSub of api.objs) {
@@ -294,7 +294,7 @@ export class Section extends SectionWithBody<Subsection | Exported> {
 
                 for (const ex of apiSub.examples) {
                     const lines = ex.split("\n");
-                    section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n")));
+                    section.body.push(new CodeContent(lines[0], lines.slice(1).join("\n"), (path + "/example.js")));
                 }
 
                 for (const ex of apiSub.objs) {
@@ -459,9 +459,9 @@ export abstract class Content extends Fragment {
         return Content.fromContent("null", "", body);
     }
 
-    static fromContent(tag: string, value: string, body: string): Content {
+    static fromContent(tag: string, value: string, body: string, filename?: string): Content {
         // @TODO: handle special Contents here
-        if (tag === "code") { return new CodeContent(value, body); }
+        if (tag === "code") { return new CodeContent(value, body, (filename != null) ? (filename + "/code.js"): "%unknown%"); }
         return new BodyContent(tag, value, parseMarkdown(body));
     }
 
@@ -488,10 +488,11 @@ export class BodyContent extends Content {
 
 export class CodeContent extends Content {
     source: string;
+    filename: string;
 
     script: Script;
 
-    constructor(value: string, source: string) {
+    constructor(value: string, source: string, path?: string) {
         super("code", value);
 
         const lines = source.split("\n");
@@ -501,7 +502,8 @@ export class CodeContent extends Content {
         }
         this.source = lines.join("\n");
 
-        this.script = new Script(this.source, this.language);
+        this.script = new Script(this.source, this.language, path);
+        this.filename = this.script.filename;
     }
 
     get text(): string {
