@@ -31,7 +31,7 @@ import type {
 
 function htmlify(value: string): string {
     if (value == null) { return "undef"; }
-    return value.replace(/&/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const Months = [
