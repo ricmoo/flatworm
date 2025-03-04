@@ -16,6 +16,19 @@ the [Sphinx](https://www.sphinx-doc.org/) project.
 - Full-text search
 - Configuarable source links
 
+Getting Started
+---------
+
+`npm install`
+
+`npm build`
+
+Make changes to files in `./docs.wrm/`.
+
+`npm render`
+
+Your static documentation files will be located in `./docs/`.
+
 Fragments
 ---------
 
