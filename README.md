@@ -16,6 +16,34 @@ the [Sphinx](https://www.sphinx-doc.org/) project.
 - Full-text search
 - Configuarable source links
 
+Getting Started
+---------------
+
+- Add flatworm as a dependency to your project:
+
+```
+npm install https://github.com/ricmoo/flatworm.git
+```
+
+- Create a new script in your `package.json` file:
+
+```
+"scripts": {
+  "flatworm": "flatworm --force ./docs.wrm ./docs"
+}
+```
+
+- Place your `.wrm` documentation files into `./docs.wrm` folder.
+
+- Generate static documentation files:
+
+```
+npm run flatworm
+```
+
+- Your static documentation files will be located in `./docs`
+
+
 Fragments
 ---------
 
