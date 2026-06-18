@@ -278,7 +278,9 @@ export class Script {
         const result: Array<{ type: ScriptLineType, line: string }> = [ ];
 
         // Setup the script context
-        const contextObject: Record<string, any> = { console };
+        const contextObject: Record<string, any> = {
+            console, process
+        };
         const context = vm.createContext(contextObject);
         if (config.contextify) { config.contextify(context); }
 
