@@ -292,7 +292,7 @@ export class Script {
             emitted = await script.runInContext(context, { });
             //console.log("EMIT", emitted);
         } catch (error) {
-            //console.log("ERROR", error);
+            console.log("Error exexcuting code:", exec.join("\n"));
             throw error;
         }
 
